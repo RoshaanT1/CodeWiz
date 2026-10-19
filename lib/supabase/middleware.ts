@@ -1,4 +1,4 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -8,12 +8,21 @@ import { getSupabaseEnv } from "./env";
 // in its own runtime. It uses the publishable key, so Row Level Security
 // still applies.
 
+export type AssuranceLevel = "aal1" | "aal2" | null;
+
 export type SessionUpdate = {
   /** Response to return when no redirect is needed. Carries refreshed cookies. */
   response: NextResponse;
   /** The verified user, or null when signed out or Supabase is unavailable. */
   user: User | null;
+  /** Supabase MFA assurance levels for the active session. */
+  aal: { currentLevel: AssuranceLevel; nextLevel: AssuranceLevel };
 };
+
+function normalizeAal(level: string | null | undefined): AssuranceLevel {
+  if (level === "aal1" || level === "aal2") return level;
+  return null;
+}
 
 /**
  * Refreshes the Supabase session cookies for this request and reports who is
@@ -26,14 +35,19 @@ export async function updateSession(
   let response = NextResponse.next({ request });
 
   const env = getSupabaseEnv();
-  if (!env.ok) return { response, user: null };
+  const signedOut = {
+    response,
+    user: null,
+    aal: { currentLevel: null, nextLevel: null },
+  };
+  if (!env.ok) return signedOut;
 
   const supabase = createServerClient(env.data.url, env.data.publishableKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet: { name: string; value: string; options?: CookieOptions }[]) {
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value);
         }
@@ -47,9 +61,21 @@ export async function updateSession(
 
   try {
     const { data, error } = await supabase.auth.getUser();
-    return { response, user: error ? null : data.user };
+    if (error || !data.user) return signedOut;
+
+    const { data: aalData, error: aalError } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+    return {
+      response,
+      user: data.user,
+      aal: {
+        currentLevel: aalError || !aalData ? null : normalizeAal(aalData.currentLevel),
+        nextLevel: aalError || !aalData ? null : normalizeAal(aalData.nextLevel),
+      },
+    };
   } catch {
-    return { response, user: null };
+    return signedOut;
   }
 }
 

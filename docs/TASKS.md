@@ -23,18 +23,18 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 
 ## 1. Auth and 2FA
 
-- [ ] **AUTH-1 Sign-up and sign-in** (Core, Fizzah). Needs SETUP-2
+- [x] **AUTH-1 Sign-up and sign-in** (Core, Fizzah). Needs SETUP-2
   - Email and password pages, sign-out, friendly errors.
   - Watch out: Supabase's built-in email sender is rate-limited. Turn off email confirmation for the event or use a custom SMTP provider, so judges can create two accounts quickly.
   - Done when: a new account can sign up, sign in and sign out on the live site.
-- [ ] **AUTH-2 Forced 2FA enrolment** (Core, Fizzah). Needs AUTH-1
+- [x] **AUTH-2 Forced 2FA enrolment** (Core, Fizzah). Needs AUTH-1
   - After the first sign-in, show a QR code for an authenticator app and confirm with a 6-digit code.
   - Done when: a new user can't reach the dashboard until 2FA is set up.
-- [ ] **AUTH-3 2FA on every sign-in** (Core, Fizzah). Needs AUTH-2
+- [x] **AUTH-3 2FA on every sign-in** (Core, Fizzah). Needs AUTH-2
   - Password, then a 6-digit code. Middleware (proxy in Next.js 16) sends any session below AAL2 to the code screen, and API routes check the level too.
   - Watch out: the UI check alone isn't enough. Enforce it on the server and in the access rules (DB-2).
   - Done when: signing in without the code gives access to nothing, including API routes.
-- [ ] **AUTH-4 Profile on sign-up** (Core, M Hammad). Needs DB-1
+- [x] **AUTH-4 Profile on sign-up** (Core, M Hammad). Needs DB-1
   - A database trigger creates the `profiles` row for each new user.
   - Done when: every new user has a profile row without any browser code.
 
@@ -108,11 +108,11 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 
 ## 6. AI layer
 
-- [ ] **AI-1 Provider wrapper** (Core, Roshaan)
+- [x] **AI-1 Provider wrapper** (Core, Roshaan)
   - One function that calls OpenAI or Anthropic with a zod schema, JSON-only output, one retry with the validation errors, timeouts and token caps.
   - Watch out: the provider and model come from environment variables, so it's easy to switch if credits change.
   - Done when: a test route on the live site returns a validated object.
-- [ ] **AI-2 Shared prompt helpers** (Core, Roshaan). Needs AI-1
+- [x] **AI-2 Shared prompt helpers** (Core, Roshaan). Needs AI-1
   - Helpers every AI step uses: numbering code lines, wrapping code in delimiters, and the instruction to treat code as data. Each step's owner writes their own prompt and schema with these helpers.
   - Watch out: imported repos can contain text that tries to steer the model. Test with a file containing "ignore all previous instructions".
   - Done when: every AI step uses the helpers, and each prompt passes its schema on all three sample repos.
@@ -124,9 +124,9 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 
 ## 7. Rounds
 
-- [ ] **ROUND-1 Candidate shortlist** (Core, M Hammad). Needs PARSE-5
+- [x] **ROUND-1 Candidate shortlist** (Core, M Hammad). Needs PARSE-5
   - Top 15 eligible functions by importance, leaving out reviewed and explained ones.
-- [ ] **ROUND-2 AI selection** (Core, M Hammad). Needs ROUND-1, AI-2
+- [x] **ROUND-2 AI selection** (Core, M Hammad). Needs ROUND-1, AI-2
   - Contract A, with code checks on the picks and a one-line reason for each.
   - Done when: a round never repeats a function and spreads across categories when it can.
 - [ ] **ROUND-3 Create a round** (Core, M Hammad). Needs ROUND-2, DB-3
