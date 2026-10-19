@@ -23,18 +23,18 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 
 ## 1. Auth and 2FA
 
-- [ ] **AUTH-1 Sign-up and sign-in** (Core, Fizzah). Needs SETUP-2
+- [x] **AUTH-1 Sign-up and sign-in** (Core, Fizzah). Needs SETUP-2
   - Email and password pages, sign-out, friendly errors.
   - Watch out: Supabase's built-in email sender is rate-limited. Turn off email confirmation for the event or use a custom SMTP provider, so judges can create two accounts quickly.
   - Done when: a new account can sign up, sign in and sign out on the live site.
-- [ ] **AUTH-2 Forced 2FA enrolment** (Core, Fizzah). Needs AUTH-1
+- [x] **AUTH-2 Forced 2FA enrolment** (Core, Fizzah). Needs AUTH-1
   - After the first sign-in, show a QR code for an authenticator app and confirm with a 6-digit code.
   - Done when: a new user can't reach the dashboard until 2FA is set up.
-- [ ] **AUTH-3 2FA on every sign-in** (Core, Fizzah). Needs AUTH-2
+- [x] **AUTH-3 2FA on every sign-in** (Core, Fizzah). Needs AUTH-2
   - Password, then a 6-digit code. Middleware (proxy in Next.js 16) sends any session below AAL2 to the code screen, and API routes check the level too.
   - Watch out: the UI check alone isn't enough. Enforce it on the server and in the access rules (DB-2).
   - Done when: signing in without the code gives access to nothing, including API routes.
-- [ ] **AUTH-4 Profile on sign-up** (Core, M Hammad). Needs DB-1
+- [x] **AUTH-4 Profile on sign-up** (Core, M Hammad). Needs DB-1
   - A database trigger creates the `profiles` row for each new user.
   - Done when: every new user has a profile row without any browser code.
 
