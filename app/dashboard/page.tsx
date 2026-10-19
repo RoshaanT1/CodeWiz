@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { RepoPreview } from "@/components/repo-preview/repo-preview";
 import {
   Card,
   CardContent,
@@ -57,6 +58,8 @@ export default async function DashboardPage() {
             You&apos;re signed in as {user.email}.
           </p>
         </div>
+
+        <RepoPreview />
 
         <Card>
           <CardHeader>
