@@ -6,6 +6,17 @@ import { callJson } from "./call-json";
 // Mock OpenAI and Anthropic SDKs so tests never make real network calls
 const mockCreateChat = vi.fn();
 const mockCreateMessage = vi.fn();
+const mockGenerateContent = vi.fn();
+
+vi.mock("@google/genai", () => {
+  return {
+    GoogleGenAI: class MockGoogleGenAI {
+      models = {
+        generateContent: mockGenerateContent,
+      };
+    },
+  };
+});
 
 vi.mock("openai", () => {
   return {
@@ -170,5 +181,148 @@ describe("callJson", () => {
       expect(result.data.count).toBe(7);
       expect(result.tokens.prompt).toBe(25);
     }
+  });
+
+  it("works with Gemini provider format", async () => {
+    mockGenerateContent.mockResolvedValueOnce({
+      text: '{"greeting":"from gemini","count":108}',
+      usageMetadata: { promptTokenCount: 18, candidatesTokenCount: 22 },
+    });
+
+    const result = await callJson({
+      prompt: "Hello Gemini",
+      schema: TestSchema,
+      provider: "gemini",
+      apiKey: "test-gemini-key",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.greeting).toBe("from gemini");
+      expect(result.data.count).toBe(108);
+      expect(result.tokens.prompt).toBe(18);
+      expect(result.tokens.completion).toBe(22);
+    }
+  });
+
+  it("works with Qwen provider (DashScope OpenAI-compatible endpoint)", async () => {
+    mockCreateChat.mockResolvedValueOnce({
+      choices: [{ message: { content: '{"greeting":"from qwen","count":77}' } }],
+      usage: { prompt_tokens: 30, completion_tokens: 12 },
+    });
+
+    const result = await callJson({
+      prompt: "Hello Qwen",
+      schema: TestSchema,
+      provider: "qwen",
+      apiKey: "test-dashscope-key",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.greeting).toBe("from qwen");
+      expect(result.data.count).toBe(77);
+      expect(result.tokens.prompt).toBe(30);
+      expect(result.tokens.completion).toBe(12);
+    }
+  });
+
+  it("returns ok: false when DASHSCOPE_API_KEY is missing for Qwen", async () => {
+    const original = process.env.DASHSCOPE_API_KEY;
+    delete process.env.DASHSCOPE_API_KEY;
+    delete process.env.QWEN_API_KEY;
+
+    const result = await callJson({
+      prompt: "Test missing key",
+      schema: TestSchema,
+      provider: "qwen",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("DASHSCOPE_API_KEY is not configured");
+    }
+
+    if (original) process.env.DASHSCOPE_API_KEY = original;
+  });
+
+  it("works with OpenRouter provider", async () => {
+    mockCreateChat.mockResolvedValueOnce({
+      choices: [{ message: { content: '{"greeting":"from openrouter","count":55}' } }],
+      usage: { prompt_tokens: 22, completion_tokens: 14 },
+    });
+
+    const result = await callJson({
+      prompt: "Hello OpenRouter",
+      schema: TestSchema,
+      provider: "openrouter",
+      apiKey: "test-openrouter-key",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.greeting).toBe("from openrouter");
+      expect(result.data.count).toBe(55);
+      expect(result.tokens.prompt).toBe(22);
+      expect(result.tokens.completion).toBe(14);
+    }
+  });
+
+  it("returns ok: false when OPENROUTER_API_KEY is missing", async () => {
+    const original = process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+
+    const result = await callJson({
+      prompt: "Test missing key",
+      schema: TestSchema,
+      provider: "openrouter",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("OPENROUTER_API_KEY is not configured");
+    }
+
+    if (original) process.env.OPENROUTER_API_KEY = original;
+  });
+
+  it("works with Groq provider", async () => {
+    mockCreateChat.mockResolvedValueOnce({
+      choices: [{ message: { content: '{"greeting":"from groq","count":33}' } }],
+      usage: { prompt_tokens: 19, completion_tokens: 9 },
+    });
+
+    const result = await callJson({
+      prompt: "Hello Groq",
+      schema: TestSchema,
+      provider: "groq",
+      apiKey: "test-groq-key",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.greeting).toBe("from groq");
+      expect(result.data.count).toBe(33);
+      expect(result.tokens.prompt).toBe(19);
+      expect(result.tokens.completion).toBe(9);
+    }
+  });
+
+  it("returns ok: false when GROQ_API_KEY is missing", async () => {
+    const original = process.env.GROQ_API_KEY;
+    delete process.env.GROQ_API_KEY;
+
+    const result = await callJson({
+      prompt: "Test missing key",
+      schema: TestSchema,
+      provider: "groq",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("GROQ_API_KEY is not configured");
+    }
+
+    if (original) process.env.GROQ_API_KEY = original;
   });
 });
