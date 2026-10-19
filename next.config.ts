@@ -17,6 +17,20 @@ const nextConfig: NextConfig = {
       "./node_modules/tree-sitter-wasms/package.json",
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/mfa/enrol",
+        destination: "/2fa/enrol",
+        permanent: false,
+      },
+      {
+        source: "/mfa/verify",
+        destination: "/2fa/verify",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
