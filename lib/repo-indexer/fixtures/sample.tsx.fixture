@@ -1,0 +1,12 @@
+import React from "react";
+
+export const Button = ({ label }: { label: string }) => {
+  const onClick = () => {
+    console.log(label);
+  };
+  return <button onClick={onClick}>{label}</button>;
+};
+
+export default function Page() {
+  return <Button label="x" />;
+}
