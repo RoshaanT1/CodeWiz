@@ -3,7 +3,7 @@
 // replaced by the contract's import route later.
 import { NextResponse } from "next/server";
 
-import { getSessionUser } from "@/lib/auth/session";
+import { requireApiAal2Session } from "@/lib/auth/session";
 import { fetchDefaultBranchTree } from "@/lib/repo-indexer/fetch-tree";
 import {
   filterTree,
@@ -30,11 +30,13 @@ function error(code: ErrorCode, message: string, status: number) {
 }
 
 export async function POST(request: Request) {
-  // Signed-in user only. No 2FA check in this phase (user's decision).
-  const session = await getSessionUser();
-  if (!session.ok) return error("UPSTREAM", session.reason, 503);
-  if (!session.data) {
-    return error("UNAUTHORIZED", "Sign in to preview a repo.", 401);
+  const session = await requireApiAal2Session();
+  if (!session.ok) {
+    return error(
+      session.status === 401 ? "UNAUTHORIZED" : "UPSTREAM",
+      session.reason,
+      session.status,
+    );
   }
 
   let url: unknown;

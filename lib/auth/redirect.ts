@@ -3,6 +3,8 @@
 
 export const SIGN_IN_PATH = "/sign-in";
 export const SIGN_UP_PATH = "/sign-up";
+export const TWO_FACTOR_ENROL_PATH = "/2fa/enrol";
+export const TWO_FACTOR_VERIFY_PATH = "/2fa/verify";
 export const DEFAULT_AFTER_SIGN_IN = "/dashboard";
 
 /** Paths that need a signed-in user. Checked on the server in middleware. */
@@ -15,7 +17,16 @@ export function isProtectedPath(pathname: string): boolean {
 }
 
 export function isAuthPage(pathname: string): boolean {
-  return pathname === SIGN_IN_PATH || pathname === SIGN_UP_PATH;
+  return (
+    pathname === SIGN_IN_PATH ||
+    pathname === SIGN_UP_PATH ||
+    pathname === TWO_FACTOR_ENROL_PATH ||
+    pathname === TWO_FACTOR_VERIFY_PATH
+  );
+}
+
+export function isTwoFactorPage(pathname: string): boolean {
+  return pathname === TWO_FACTOR_ENROL_PATH || pathname === TWO_FACTOR_VERIFY_PATH;
 }
 
 function hasControlCharacter(value: string): boolean {
