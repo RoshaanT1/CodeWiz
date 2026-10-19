@@ -1,0 +1,25 @@
+// fixture
+export function topLevel(a) {
+  return a + 1;
+}
+
+export const arrow = (x) => {
+  return x * 2;
+};
+
+const expr = function (y) {
+  return y;
+};
+
+class Greeter {
+  greet(name) {
+    return "hi " + name;
+  }
+
+  static create() {
+    return new Greeter();
+  }
+}
+
+[1, 2].map((n) => n + 1);
+setTimeout(function () {}, 10);

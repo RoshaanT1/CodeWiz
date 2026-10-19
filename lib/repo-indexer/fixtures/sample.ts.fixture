@@ -1,0 +1,25 @@
+interface Shape {
+  area(): number;
+}
+
+export class Circle implements Shape {
+  private r: number;
+
+  constructor(r: number) {
+    this.r = r;
+  }
+
+  area(): number {
+    return Math.PI * this.r ** 2;
+  }
+
+  handler = (e: Event): void => {
+    console.log(e);
+  };
+}
+
+export async function load(id: string): Promise<string> {
+  return id;
+}
+
+const helper = (v: number): number => v;
