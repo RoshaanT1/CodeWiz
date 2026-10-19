@@ -4,7 +4,7 @@
 // The 20-file cap is specific to this temporary route.
 import { NextResponse } from "next/server";
 
-import { getSessionUser } from "@/lib/auth/session";
+import { requireApiAal2Session } from "@/lib/auth/session";
 import { extractFunctions } from "@/lib/repo-indexer/extract-functions";
 import { fetchFiles } from "@/lib/repo-indexer/fetch-files";
 import { fetchDefaultBranchTree } from "@/lib/repo-indexer/fetch-tree";
@@ -38,11 +38,13 @@ function error(code: ErrorCode, message: string, status: number) {
 }
 
 export async function POST(request: Request) {
-  // Signed-in user only. No 2FA check in this phase (same as the preview route).
-  const session = await getSessionUser();
-  if (!session.ok) return error("UPSTREAM", session.reason, 503);
-  if (!session.data) {
-    return error("UNAUTHORIZED", "Sign in to read a repo's functions.", 401);
+  const session = await requireApiAal2Session();
+  if (!session.ok) {
+    return error(
+      session.status === 401 ? "UNAUTHORIZED" : "UPSTREAM",
+      session.reason,
+      session.status,
+    );
   }
 
   let url: unknown;

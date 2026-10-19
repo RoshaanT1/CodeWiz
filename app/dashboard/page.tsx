@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { requireUser } from "@/lib/auth/session";
+import { requireAal2User } from "@/lib/auth/session";
 
 export const metadata: Metadata = { title: "Dashboard · CodeWiz" };
 
@@ -30,7 +30,7 @@ function formatDate(value: string | undefined): string {
 export default async function DashboardPage() {
   // Server-side check on top of the middleware: signed-out visitors are sent
   // to the sign-in page before any dashboard content is rendered.
-  const user = await requireUser("/dashboard");
+  const user = await requireAal2User("/dashboard");
 
   return (
     <div className="min-h-screen">

@@ -59,21 +59,23 @@ if (!result.ok) {
 
 There is no admin client yet.
 
-## Auth and the protected dashboard
+## Auth, 2FA and the protected dashboard
 
-Email and password auth through Supabase Auth. No 2FA yet.
+Email and password auth through Supabase Auth with forced TOTP two-factor authentication. New users must set up an authenticator app before opening the dashboard, and returning users must enter a fresh 6-digit code after every password sign-in.
 
 | URL | What it is |
 |---|---|
 | `/sign-up` | Create an account. With email confirmation off, you get a session and land on `/dashboard` |
 | `/sign-in` | Sign in. Wrong credentials and existing accounts show a clear message |
+| `/2fa/enrol` | Set up a TOTP authenticator app with a QR code, manual secret and 6-digit verification |
+| `/2fa/verify` | Enter the current authenticator code to promote the session to AAL2 |
 | `/sign-out` | `POST` only. The dashboard's Sign out button posts here, clears the session and goes to `/sign-in` |
-| `/dashboard` | Protected. Signed-out visitors are redirected to `/sign-in?next=/dashboard` |
+| `/dashboard` | Protected. Signed-out visitors go to `/sign-in`; sessions below AAL2 go to `/2fa/enrol` or `/2fa/verify` |
 
 Protection is enforced on the server in two places, never only in the browser:
 
-1. `middleware.ts` refreshes the session cookies on each request and redirects signed-out visitors away from `/dashboard` before the page renders. Signed-in users who open `/sign-in` or `/sign-up` go to the dashboard.
-2. `app/dashboard/page.tsx` calls `requireUser()` from `lib/auth/session.ts`, which re-checks the user with Supabase and redirects if there is none.
+1. `middleware.ts` refreshes the session cookies on each request and redirects signed-out visitors away from `/dashboard` before the page renders. It also checks Supabase MFA assurance levels: `nextLevel === "aal1"` goes to enrolment, and `nextLevel === "aal2"` with `currentLevel !== "aal2"` goes to verification.
+2. `app/dashboard/page.tsx` calls `requireAal2User()` from `lib/auth/session.ts`, which re-checks both the user and AAL2 status with Supabase before rendering content. Route handlers can use `requireApiAal2Session()` for JSON 401/403/503 responses.
 
 Both use `auth.getUser()`, which verifies the token with Supabase, so a forged or expired cookie doesn't count as signed in. If the Supabase variables are missing, `/dashboard` stays closed and the sign-in page shows which variable is missing.
 
@@ -95,7 +97,7 @@ To add another protected area, add its path prefix to `PROTECTED_PREFIXES` in `l
 
 ## Repo file preview (checkpoint)
 
-The dashboard has a "Preview a repo" form. Paste a public GitHub repo and it lists the default branch's files grouped by folder. Set `GITHUB_TOKEN` (Secrets panel or `.env.local`) first; if it's missing, the form shows a clear message.
+The dashboard has a "Preview a repo" form. Paste a public GitHub repo and it lists the default branch's files grouped by folder. Set `GITHUB_TOKEN` (Secrets panel or `.env.local`) first; if it's missing, the form shows a clear message. The API route now requires an AAL2 session, so users must finish 2FA before previewing repos.
 
 - Accepts `owner/repo`, `.git`, a trailing slash, `https://github.com/...` and `/tree/branch/path` links. The branch is parsed but the default branch is always listed.
 - Skips `node_modules`, `dist`, `build`, `.next`, `vendor` and binary files. Listing is static: no repo code is fetched or run.

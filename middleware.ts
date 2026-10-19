@@ -3,8 +3,11 @@ import type { NextRequest } from "next/server";
 import {
   isAuthPage,
   isProtectedPath,
+  isTwoFactorPage,
   safeNextPath,
   SIGN_IN_PATH,
+  TWO_FACTOR_ENROL_PATH,
+  TWO_FACTOR_VERIFY_PATH,
 } from "@/lib/auth/redirect";
 import { redirectWithCookies, updateSession } from "@/lib/supabase/middleware";
 
@@ -14,7 +17,7 @@ import { redirectWithCookies, updateSession } from "@/lib/supabase/middleware";
  * Supabase session cookies fresh on every page request.
  */
 export async function middleware(request: NextRequest) {
-  const { response, user } = await updateSession(request);
+  const { response, user, aal } = await updateSession(request);
   const { pathname, search, origin } = request.nextUrl;
 
   if (!user && isProtectedPath(pathname)) {
@@ -23,7 +26,21 @@ export async function middleware(request: NextRequest) {
     return redirectWithCookies(signIn, response);
   }
 
-  if (user && isAuthPage(pathname)) {
+  if (user && isProtectedPath(pathname)) {
+    if (aal.nextLevel === "aal1") {
+      const enrol = new URL(TWO_FACTOR_ENROL_PATH, origin);
+      enrol.searchParams.set("next", `${pathname}${search}`);
+      return redirectWithCookies(enrol, response);
+    }
+
+    if (aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+      const verify = new URL(TWO_FACTOR_VERIFY_PATH, origin);
+      verify.searchParams.set("next", `${pathname}${search}`);
+      return redirectWithCookies(verify, response);
+    }
+  }
+
+  if (user && isAuthPage(pathname) && !isTwoFactorPage(pathname)) {
     const target = new URL(
       safeNextPath(request.nextUrl.searchParams.get("next")),
       origin,
