@@ -108,11 +108,11 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 
 ## 6. AI layer
 
-- [ ] **AI-1 Provider wrapper** (Core, Roshaan)
+- [x] **AI-1 Provider wrapper** (Core, Roshaan)
   - One function that calls OpenAI or Anthropic with a zod schema, JSON-only output, one retry with the validation errors, timeouts and token caps.
   - Watch out: the provider and model come from environment variables, so it's easy to switch if credits change.
   - Done when: a test route on the live site returns a validated object.
-- [ ] **AI-2 Shared prompt helpers** (Core, Roshaan). Needs AI-1
+- [x] **AI-2 Shared prompt helpers** (Core, Roshaan). Needs AI-1
   - Helpers every AI step uses: numbering code lines, wrapping code in delimiters, and the instruction to treat code as data. Each step's owner writes their own prompt and schema with these helpers.
   - Watch out: imported repos can contain text that tries to steer the model. Test with a file containing "ignore all previous instructions".
   - Done when: every AI step uses the helpers, and each prompt passes its schema on all three sample repos.
@@ -124,9 +124,9 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 
 ## 7. Rounds
 
-- [ ] **ROUND-1 Candidate shortlist** (Core, M Hammad). Needs PARSE-5
+- [x] **ROUND-1 Candidate shortlist** (Core, M Hammad). Needs PARSE-5
   - Top 15 eligible functions by importance, leaving out reviewed and explained ones.
-- [ ] **ROUND-2 AI selection** (Core, M Hammad). Needs ROUND-1, AI-2
+- [x] **ROUND-2 AI selection** (Core, M Hammad). Needs ROUND-1, AI-2
   - Contract A, with code checks on the picks and a one-line reason for each.
   - Done when: a round never repeats a function and spreads across categories when it can.
 - [ ] **ROUND-3 Create a round** (Core, M Hammad). Needs ROUND-2, DB-3
