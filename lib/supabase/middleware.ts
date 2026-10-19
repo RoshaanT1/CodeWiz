@@ -1,4 +1,4 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -18,6 +18,11 @@ export type SessionUpdate = {
   /** Supabase MFA assurance levels for the active session. */
   aal: { currentLevel: AssuranceLevel; nextLevel: AssuranceLevel };
 };
+
+function normalizeAal(level: string | null | undefined): AssuranceLevel {
+  if (level === "aal1" || level === "aal2") return level;
+  return null;
+}
 
 /**
  * Refreshes the Supabase session cookies for this request and reports who is
@@ -42,7 +47,7 @@ export async function updateSession(
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet: { name: string; value: string; options?: CookieOptions }[]) {
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value);
         }
@@ -65,8 +70,8 @@ export async function updateSession(
       response,
       user: data.user,
       aal: {
-        currentLevel: aalError ? null : aalData.currentLevel,
-        nextLevel: aalError ? null : aalData.nextLevel,
+        currentLevel: aalError || !aalData ? null : normalizeAal(aalData.currentLevel),
+        nextLevel: aalError || !aalData ? null : normalizeAal(aalData.nextLevel),
       },
     };
   } catch {
