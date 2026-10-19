@@ -70,6 +70,21 @@ export function TwoFactorForm({ mode, next }: Props) {
         }
 
         if (mode === "enrol") {
+          const { data: existingFactors } = await client.data.auth.mfa.listFactors();
+          const verified = getVerifiedTotpFactorId(existingFactors?.totp);
+          if (verified) {
+            router.replace(`/2fa/verify?next=${encodeURIComponent(target)}`);
+            return;
+          }
+
+          if (existingFactors?.all) {
+            for (const f of existingFactors.all) {
+              if (f.status === "unverified") {
+                await client.data.auth.mfa.unenroll({ factorId: f.id });
+              }
+            }
+          }
+
           const { data, error: enrollError } = await client.data.auth.mfa.enroll({
             factorType: "totp",
           });
