@@ -2,7 +2,7 @@
 
 ## Description
 
-One function to get schema-checked JSON from OpenAI or Anthropic. It validates the output with zod, retries once with the errors, and returns a clean result instead of throwing.
+One function to get schema-checked JSON from OpenAI, Anthropic, Google Gemini, Qwen, OpenRouter, or Groq. It validates the output with zod, retries once with the errors, and returns a clean typed result instead of throwing.
 
 ## Skills
 
@@ -10,20 +10,23 @@ TypeScript, Node.js
 
 ## Custom tags
 
-LLM, zod, OpenAI, Anthropic, structured output, JSON, retry
+LLM, zod, OpenAI, Anthropic, Gemini, Groq, OpenRouter, structured output, JSON, retry
 
 ## What it does
 
-- Prompts OpenAI or Anthropic models for structured JSON output.
+- Prompts OpenAI, Anthropic, Google Gemini, Qwen, OpenRouter, or Groq models for structured JSON output.
 - Automatically strips Markdown code fences (e.g., ````json ... ````).
 - Validates the returned object against any Zod schema (`z.ZodSchema<T>`).
 - If parsing or validation fails, it automatically retries once, feeding the exact Zod validation error issues back to the model.
 - Catches network, timeout, and authentication errors, returning a typed `{ ok: true, data }` or `{ ok: false, reason }` result without throwing unhandled exceptions.
 - Zero dependencies on application code or specific database schemas — drop it directly into any TypeScript project.
+- Qwen, OpenRouter, and Groq reuse the official OpenAI client SDK via compatible `baseURL` endpoints — no extra packages required.
 
 ## Public API
 
 ```ts
+export type LlmProvider = "openai" | "anthropic" | "gemini" | "qwen" | "openrouter" | "groq";
+
 export type CallJsonOptions<T> = {
   prompt: string;
   schema: z.ZodSchema<T>;
@@ -31,7 +34,7 @@ export type CallJsonOptions<T> = {
   temperature?: number;
   maxTokens?: number;
   timeoutMs?: number;
-  provider?: "openai" | "anthropic";
+  provider?: LlmProvider;
   model?: string;
   apiKey?: string;
 };
@@ -56,23 +59,45 @@ export function callJson<T>(options: CallJsonOptions<T>): Promise<CallJsonResult
 ## Install
 
 ```bash
-npm install zod openai @anthropic-ai/sdk
+npm install zod openai @anthropic-ai/sdk @google/genai
 ```
+
+*(Note: Qwen, OpenRouter, and Groq connect through the `openai` SDK — no additional packages needed!)*
 
 ## Setup
 
-Set environment variables for the provider you want to use:
+Set environment variables for whichever provider you or your developers want to choose:
 
 ```bash
-# For OpenAI
+# 1. OpenAI (default)
 OPENAI_API_KEY=sk-...
 AI_PROVIDER=openai          # optional, default is openai
 AI_MODEL=gpt-4o-mini        # optional, default is gpt-4o-mini
 
-# For Anthropic
+# 2. Anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 AI_PROVIDER=anthropic
 AI_MODEL=claude-3-5-sonnet-20241022
+
+# 3. Google Gemini
+GEMINI_API_KEY=AIza...
+AI_PROVIDER=gemini
+AI_MODEL=gemini-3.8-flash   # optional, default is gemini-3.8-flash
+
+# 4. Groq (ultra-fast inference)
+GROQ_API_KEY=gsk_...
+AI_PROVIDER=groq
+AI_MODEL=openai/gpt-oss-20b # optional
+
+# 5. OpenRouter (hundreds of models via one API)
+OPENROUTER_API_KEY=sk-or-...
+AI_PROVIDER=openrouter
+AI_MODEL=mistralai/mistral-7b-instruct # or any model on OpenRouter
+
+# 6. Qwen / Alibaba DashScope
+DASHSCOPE_API_KEY=sk-...
+AI_PROVIDER=qwen
+AI_MODEL=qwen-plus          # optional
 ```
 
 ## Usage Example
@@ -113,6 +138,7 @@ if (result.ok) {
 - Zod — MIT: https://github.com/colinhacks/zod
 - OpenAI Node SDK — Apache-2.0: https://github.com/openai/openai-node
 - Anthropic TypeScript SDK — MIT: https://github.com/anthropics/anthropic-sdk-typescript
+- Google GenAI SDK — Apache-2.0: https://github.com/googleapis/js-genai
 
 ## Contributors
 
@@ -130,52 +156,50 @@ Publish at Devmarketplace → Add your Gigs
 
 2. Basic Info
    Title (39/50): Typed LLM JSON calls with zod and retry
-   Description (177/200): One function to get schema-checked JSON from OpenAI or Anthropic. It validates the output with zod, retries once with the errors, and returns a clean result instead of throwing.
+   Description (199/200): One function to get schema-checked JSON from OpenAI, Anthropic, Gemini, Groq, OpenRouter, or Qwen. Validates output with zod, retries once with errors, returns a clean typed result instead of throwing.
 
 3. Tech Stack
    Skills (pick the closest ones in the list): TypeScript, Node.js
-   Custom tags (7/10, press Enter after each): LLM, zod, OpenAI, Anthropic, structured output, JSON, retry
+   Custom tags (8/10, press Enter after each): LLM, zod, OpenAI, Anthropic, Gemini, Groq, OpenRouter, structured output
 
 4. Code Snippet
    Language: TypeScript
-   From: lib/ai/call-json.ts, lines 65 to 105
+   From: lib/ai/call-json.ts, lines 71 to 107
 
 ```ts
 export async function callJson<T>(
   options: CallJsonOptions<T>,
 ): Promise<CallJsonResult<T>> {
   const startTime = Date.now();
-  const provider =
+  const envProvider = process.env.AI_PROVIDER?.toLowerCase();
+  const provider: LlmProvider =
     options.provider ??
-    (process.env.AI_PROVIDER === "anthropic" ? "anthropic" : "openai");
+    (envProvider === "gemini"
+      ? "gemini"
+      : envProvider === "anthropic"
+        ? "anthropic"
+        : envProvider === "qwen"
+          ? "qwen"
+          : envProvider === "openrouter"
+            ? "openrouter"
+            : envProvider === "groq"
+              ? "groq"
+              : "openai");
 
   const defaultModel =
-    provider === "anthropic"
-      ? "claude-3-5-sonnet-20241022"
-      : "gpt-4o-mini";
+    provider === "gemini"
+      ? "gemini-3.8-flash"
+      : provider === "anthropic"
+        ? "claude-3-5-sonnet-20241022"
+        : provider === "qwen"
+          ? "qwen-plus"
+          : provider === "openrouter"
+            ? "mistralai/mistral-7b-instruct"
+            : provider === "groq"
+              ? "openai/gpt-oss-20b"
+              : "gpt-4o-mini";
 
   const model = options.model ?? process.env.AI_MODEL ?? defaultModel;
-  const timeoutMs = options.timeoutMs ?? 30000;
-  const temperature = options.temperature ?? 0.2;
-  const maxTokens = options.maxTokens ?? 2000;
-
-  const totalTokens = { prompt: 0, completion: 0 };
-  let lastErrorReason = "";
-
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const currentPrompt =
-      attempt === 1
-        ? options.prompt
-        : `${options.prompt}\n\n[ATTENTION: Your previous output failed schema validation]:\n${lastErrorReason}\n\nPlease fix the errors and output ONLY valid JSON.`;
-
-    try {
-      // Calls OpenAI or Anthropic, parses JSON, and validates with options.schema.safeParse()
-      // ...
-    } catch (err) {
-      lastErrorReason = String(err);
-    }
-  }
-}
 ```
 
 5. Read ME
