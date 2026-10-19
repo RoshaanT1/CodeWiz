@@ -37,7 +37,7 @@ Gigs 1 and 2 come first. Publish a bonus gig only while the core build is on tra
 
 | Gig | Status | Devmarketplace link | Commit |
 |---|---|---|---|
-| 1. GitHub Repo Indexer | Not started | | |
+| 1. GitHub Repo Indexer | Ready | | |
 | 2. Verified Bug Planter | Not started | | |
 | 3. Supabase TOTP 2FA | Ready | | 17c4622 |
 | 4. Typed LLM JSON Calls | Ready | | bf8cec6 |
