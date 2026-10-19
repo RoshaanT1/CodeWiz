@@ -32,7 +32,7 @@ Open http://localhost:3000.
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Browser and server Supabase clients | No |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser and server Supabase clients | No |
-| `GITHUB_TOKEN` | Server only (repo preview, added in a later step) | Yes |
+| `GITHUB_TOKEN` | Server only (`/api/repos/preview`) | Yes |
 
 Only `NEXT_PUBLIC_*` variables ever reach the browser. If a Supabase variable is missing, the clients return `{ ok: false, reason }` with a message naming the missing variable instead of throwing.
 
@@ -92,6 +92,25 @@ To add another protected area, add its path prefix to `PROTECTED_PREFIXES` in `l
 | `lib/auth/credentials.ts` | Form validation and the sign-in and sign-up calls |
 | `lib/auth/messages.ts` | Turns Supabase auth errors into readable messages |
 | `components/auth/` | Sign-in and sign-up form, page frame, sign-out button |
+
+## Repo file preview (checkpoint)
+
+The dashboard has a "Preview a repo" form. Paste a public GitHub repo and it lists the default branch's files grouped by folder. Set `GITHUB_TOKEN` (Secrets panel or `.env.local`) first; if it's missing, the form shows a clear message.
+
+- Accepts `owner/repo`, `.git`, a trailing slash, `https://github.com/...` and `/tree/branch/path` links. The branch is parsed but the default branch is always listed.
+- Skips `node_modules`, `dist`, `build`, `.next`, `vendor` and binary files. Listing is static: no repo code is fetched or run.
+- Distinct messages for an invalid URL, a repo that's not found or private (one shared message), and a GitHub rate limit. A "Partial list" notice shows when GitHub truncates the tree.
+- `POST /api/repos/preview` with `{ "url": "..." }` needs a signed-in user (401 otherwise). No 2FA check yet. It's **temporary** and not in the `docs/ARCHITECTURE.md` contract, so replace it with the contract route later.
+
+| File | What it does |
+|---|---|
+| `app/api/repos/preview/route.ts` | Temporary route handler |
+| `lib/repo-indexer/parse-repo-url.ts` | Pure URL parser (no app imports) |
+| `lib/repo-indexer/file-tree.ts` | Pure filter and group-by-folder helpers (no app imports) |
+| `lib/repo-indexer/fetch-tree.ts` | GitHub REST calls; token passed in as a parameter |
+| `components/repo-preview/` | Form, states and grouped file list |
+
+No database tables are used, and nothing is stored.
 
 ## Adding shadcn/ui components
 
