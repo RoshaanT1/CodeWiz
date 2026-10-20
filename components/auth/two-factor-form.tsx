@@ -1,11 +1,12 @@
 "use client";
 
+import { ArrowRight, Check, Clipboard, Command, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { safeNextPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 
@@ -41,6 +42,13 @@ function getVerifiedTotpFactorId(factors: unknown): string | null {
     : null;
 }
 
+/** Supabase returns the QR code as raw SVG or as an SVG data URL. */
+function qrCodeSrc(qrCode: string): string {
+  return qrCode.startsWith("data:")
+    ? qrCode
+    : `data:image/svg+xml;utf-8,${encodeURIComponent(qrCode)}`;
+}
+
 export function TwoFactorForm({ mode, next }: Props) {
   const router = useRouter();
   const target = useMemo(() => safeNextPath(next), [next]);
@@ -49,7 +57,7 @@ export function TwoFactorForm({ mode, next }: Props) {
   const [pending, setPending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,7 +138,6 @@ export function TwoFactorForm({ mode, next }: Props) {
     event.preventDefault();
     if (pending) return;
     setError(null);
-    setNotice(null);
 
     const trimmed = code.replace(/\s/g, "");
     if (!/^\d{6}$/.test(trimmed)) {
@@ -176,40 +183,143 @@ export function TwoFactorForm({ mode, next }: Props) {
     router.refresh();
   }
 
-  if (loading) return <p className="text-sm text-muted-foreground">Preparing your 2FA check…</p>;
+  async function copySecret() {
+    if (!factor) return;
+    try {
+      await navigator.clipboard.writeText(factor.secret);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setError("Clipboard access is unavailable. Select and copy the setup key instead.");
+    }
+  }
+
+  const setup = mode === "enrol";
+  const codeInput = (
+    <Input
+      id="totp-code"
+      value={code}
+      onChange={(e) => {
+        setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+        setError(null);
+      }}
+      inputMode="numeric"
+      autoComplete="one-time-code"
+      pattern="[0-9]*"
+      maxLength={6}
+      placeholder="000000"
+      className="mt-2 font-mono tracking-[.35em]"
+      disabled={pending}
+      data-testid="input-2fa-code"
+    />
+  );
 
   return (
-    <div className="space-y-4">
-      {mode === "enrol" && factor && (
-        <div className="space-y-3 rounded-md border bg-muted/30 p-3">
-          <div className="mx-auto w-fit rounded-md bg-white p-2" dangerouslySetInnerHTML={{ __html: factor.qrCode }} />
-          <div className="space-y-1 text-sm">
-            <p className="font-medium">Manual setup key</p>
-            <p className="break-all rounded bg-background px-2 py-1 font-mono text-xs">{factor.secret}</p>
-            <details className="text-xs text-muted-foreground">
-              <summary>Show TOTP URI</summary>
-              <p className="mt-1 break-all">{factor.uri}</p>
-            </details>
+    <div className="min-h-[100dvh]">
+      <header className="mx-auto flex max-w-[1200px] px-5 py-5">
+        <Link href="/" className="inline-flex items-center gap-2 font-semibold text-foreground">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <Command size={15} />
+          </span>
+          codewiz
+        </Link>
+      </header>
+      <main className="mx-auto mt-9 max-w-md px-5">
+        <div className="rounded-lg border bg-card p-6 sm:p-8">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-primary">
+            {setup ? <ShieldCheck size={19} /> : <Command size={19} />}
           </div>
-        </div>
-      )}
+          <h1 className="mt-5 text-xl font-semibold">
+            {setup ? "Set up two-factor authentication" : "Verify it’s you"}
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {setup
+              ? "Scan the QR code with your authenticator app, then enter the six-digit code to protect your account."
+              : "Enter the six-digit code from your authenticator app to continue."}
+          </p>
 
-      {notice && <p role="status" className="rounded-md border bg-muted px-3 py-2 text-sm">{notice}</p>}
-      {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
-
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="totp-code">6-digit code</Label>
-          <Input id="totp-code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} disabled={pending} required />
+          {loading ? (
+            <p role="status" className="mt-5 animate-pulse text-sm text-muted-foreground">
+              Preparing your 2FA check…
+            </p>
+          ) : (
+            <form onSubmit={onSubmit} noValidate>
+              {setup && factor && (
+                <>
+                  <div className="my-5 rounded-md border bg-muted/30 p-4">
+                    <div className="text-xs font-semibold">Authenticator QR code</div>
+                    <div
+                      className="mt-3 flex justify-center rounded-md border bg-white p-4"
+                      data-testid="qr-code-visual"
+                      aria-label="QR code for your authenticator app"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={qrCodeSrc(factor.qrCode)} alt="QR code for your authenticator app" className="h-36 w-36" />
+                    </div>
+                    <p className="mt-2 text-center text-[10px] text-muted-foreground">
+                      Can’t scan it? Enter the setup key below instead.
+                    </p>
+                  </div>
+                  <label className="block text-xs font-medium">Setup key</label>
+                  <div className="mt-2 flex gap-2">
+                    <code
+                      className="flex flex-1 items-center break-all rounded-md border bg-muted/40 px-3 font-mono text-xs tracking-wider"
+                      data-testid="text-setup-secret"
+                    >
+                      {factor.secret}
+                    </code>
+                    <Button type="button" variant="outline" onClick={copySecret} aria-label="Copy setup key" data-testid="button-copy-secret">
+                      {copied ? <Check size={14} /> : <Clipboard size={14} />}
+                      <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
+                    </Button>
+                  </div>
+                  {copied && (
+                    <p className="mt-1 text-xs text-primary" data-testid="status-secret-copied">
+                      Setup key copied.
+                    </p>
+                  )}
+                </>
+              )}
+              <label htmlFor="totp-code" className="mt-5 block text-xs font-medium">
+                {setup ? "Six-digit confirmation code" : "Verification code"}
+                {codeInput}
+              </label>
+              {error && (
+                <p className="mt-2 text-xs text-destructive" role="alert" data-testid="status-2fa-error">
+                  {error}
+                </p>
+              )}
+              <Button
+                type="submit"
+                className="mt-4 w-full"
+                disabled={pending || code.length !== 6 || (setup && !factor)}
+                data-testid={setup ? "button-setup-2fa" : "button-verify-2fa"}
+              >
+                {pending ? (
+                  "Checking code…"
+                ) : setup ? (
+                  <>
+                    Confirm setup <Check size={14} />
+                  </>
+                ) : (
+                  <>
+                    Verify and continue <ArrowRight size={14} />
+                  </>
+                )}
+              </Button>
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={pending}
+                className="mt-4 w-full text-center text-xs text-muted-foreground hover:text-foreground"
+                data-testid="button-back-signin"
+              >
+                Back to sign in
+              </button>
+            </form>
+          )}
         </div>
-        <Button type="submit" className="w-full" disabled={pending || (mode === "enrol" && !factor)}>
-          {pending ? "Checking code…" : mode === "enrol" ? "Finish 2FA setup" : "Verify and continue"}
-        </Button>
-        {mode === "verify" && (
-          <Button type="button" variant="outline" className="w-full" disabled={pending} onClick={() => setNotice("Open your authenticator app and use the newest CodeWiz code. It refreshes every 30 seconds.")}>Resend / get a new code</Button>
-        )}
-        <Button type="button" variant="ghost" className="w-full" disabled={pending} onClick={onCancel}>Cancel and sign out</Button>
-      </form>
+      </main>
     </div>
   );
 }
