@@ -14,10 +14,7 @@ export default async function SignUpPage({ searchParams }: Props) {
   const { next } = await searchParams;
 
   return (
-    <AuthCard
-      title="Create your account"
-      description="Sign up with an email and password. You'll land on your dashboard right away."
-    >
+    <AuthCard mode="sign-up">
       <AuthForm mode="sign-up" next={safeNextPath(next)} />
     </AuthCard>
   );

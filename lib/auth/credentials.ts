@@ -38,6 +38,8 @@ export async function submitCredentials(
   mode: AuthMode,
   email: string,
   password: string,
+  /** Display name saved in user metadata on sign-up. */
+  name?: string,
 ): Promise<AuthOutcome> {
   try {
     if (mode === "sign-in") {
@@ -51,7 +53,11 @@ export async function submitCredentials(
       return { status: "signed-in" };
     }
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: name ? { data: { full_name: name } } : undefined,
+    });
     if (error) {
       return { status: "error", message: describeAuthError(error, mode) };
     }
