@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 
-import { AuthCard } from "@/components/auth/auth-card";
 import { TwoFactorForm } from "@/components/auth/two-factor-form";
 import { safeNextPath } from "@/lib/auth/redirect";
 
@@ -13,11 +12,6 @@ type Props = { searchParams: Promise<{ next?: string | string[] }> };
 export default async function TwoFactorVerifyPage({ searchParams }: Props) {
   const { next } = await searchParams;
   return (
-    <AuthCard
-      title="Enter your 2FA code"
-      description="Use the current 6-digit code from your authenticator app to finish signing in."
-    >
-      <TwoFactorForm mode="verify" next={safeNextPath(next)} />
-    </AuthCard>
+    <TwoFactorForm mode="verify" next={safeNextPath(next)} />
   );
 }

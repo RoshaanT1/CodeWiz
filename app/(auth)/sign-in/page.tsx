@@ -14,10 +14,7 @@ export default async function SignInPage({ searchParams }: Props) {
   const { next } = await searchParams;
 
   return (
-    <AuthCard
-      title="Sign in"
-      description="Use your email and password to open your dashboard."
-    >
+    <AuthCard mode="sign-in">
       <AuthForm mode="sign-in" next={safeNextPath(next)} />
     </AuthCard>
   );
