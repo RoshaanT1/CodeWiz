@@ -37,12 +37,12 @@ Gigs 1 and 2 come first. Publish a bonus gig only while the core build is on tra
 
 | Gig | Status | Devmarketplace link | Commit |
 |---|---|---|---|
-| 1. GitHub Repo Indexer | Ready | | 788a776 |
-| 2. Verified Bug Planter | Ready | | f447be0 |
-| 3. Supabase TOTP 2FA | Ready | | 17c4622 |
-| 4. Typed LLM JSON Calls | Ready | | 384ca15 |
-| 5. Package Registry Verifier | Not started | | |
-| 6. React Call Map | Not started | | |
+| 1. GitHub Repo Indexer | Published (by Fizzah) | Link to add | 788a776 |
+| 2. Verified Bug Planter | Published (by Roshaan) | Link to add | f447be0 |
+| 3. Supabase TOTP 2FA | Published (by Fizzah) | Link to add | 17c4622 |
+| 4. Typed LLM JSON Calls | Published (by Fizzah) | Link to add | 384ca15 |
+| 5. Package Registry Verifier | Ready | | fa72655 |
+| 6. React Call Map | Ready | | aabd8be |
 
 Status goes from Not started, to Ready (the agent prepared it), to Published (link added).
 
