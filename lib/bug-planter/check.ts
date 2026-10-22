@@ -21,6 +21,18 @@ export type CheckPlantedResult =
   | { ok: true; changedCode: string; bugs: PlantedBug[] }
   | { ok: false; issues: string[] };
 
+/** Cheap text checks that a bug's type matches the lines it changes. */
+function checkBugTypeFits(type: BugType, originalLines: readonly string[]): string | null {
+  const text = originalLines.join("\n");
+  if (type === "wrong_return" && !/\breturn\b/.test(text)) {
+    return "wrong_return must change a return statement.";
+  }
+  if (type === "mutable_default" && !/\bNone\b/.test(text)) {
+    return "mutable_default must change a None default argument.";
+  }
+  return null;
+}
+
 /**
  * Code checks for AI step D: bug count, catalogue types, line ranges inside
  * the function, no overlaps, same line count, and every changed line belongs
@@ -56,6 +68,11 @@ export function checkPlantedBugs(options: CheckPlantedOptions): CheckPlantedResu
     }
     if (bug.line_start < startLine || bug.line_end > endLine) {
       issues.push(`${label}: lines ${bug.line_start}-${bug.line_end} are outside ${startLine}-${endLine}.`);
+      continue;
+    }
+    const typeIssue = checkBugTypeFits(bug.bug_type, originalLines.slice(bug.line_start - startLine, bug.line_end - startLine + 1));
+    if (typeIssue) {
+      issues.push(`${label}: ${typeIssue}`);
       continue;
     }
     bugs.push({
