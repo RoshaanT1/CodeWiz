@@ -8,6 +8,7 @@ import type {
   AnalysisStatus,
 } from "./graph-types";
 import { GraphCanvas } from "./graph-canvas";
+import { GitGraphView } from "./git-graph-view";
 import { GraphToolbar } from "./graph-toolbar";
 import { GraphLegend } from "./graph-legend";
 import { NodeInspector } from "./node-inspector";
@@ -42,9 +43,9 @@ export function RepoGraphWorkspace({
   const [typeFilter, setTypeFilter] = useState<GraphNodeType | "all">("all");
   const [showGrid, setShowGrid] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
-  const [is3dCube, setIs3dCube] = useState(true);
+  const [is3dCube, setIs3dCube] = useState(false);
   const [animate, setAnimate] = useState(true);
-  const [viewMode, setViewMode] = useState<"graph" | "table">("graph");
+  const [viewMode, setViewMode] = useState<"git-graph" | "canvas" | "table">("git-graph");
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   // Filter nodes based on search and type filter
@@ -128,7 +129,7 @@ export function RepoGraphWorkspace({
         setAnimate((v) => !v);
       } else if (e.key.toLowerCase() === "t") {
         e.preventDefault();
-        setViewMode((m) => (m === "graph" ? "table" : "graph"));
+        setViewMode((m) => (m === "git-graph" ? "table" : m === "table" ? "canvas" : "git-graph"));
       } else if (e.key === "Escape") {
         setSelectedId(null);
         setShowShortcuts(false);
@@ -159,7 +160,7 @@ export function RepoGraphWorkspace({
         animate={animate}
         onToggleAnimate={() => setAnimate((v) => !v)}
         viewMode={viewMode}
-        onToggleViewMode={() => setViewMode((m) => (m === "graph" ? "table" : "graph"))}
+        onChangeViewMode={(mode) => setViewMode(mode)}
         nodeCount={filteredNodes.length}
         edgeCount={graph.edges.length}
         onOpenShortcuts={() => setShowShortcuts(true)}
@@ -193,8 +194,33 @@ export function RepoGraphWorkspace({
           </div>
         )}
 
-        {/* View mode toggle: Interactive 3D Canvas or Accessible Table */}
-        {viewMode === "graph" ? (
+        {/* View mode render */}
+        {viewMode === "git-graph" ? (
+          <>
+            <GitGraphView
+              nodes={filteredNodes}
+              edges={graph.edges}
+              selectedId={selectedId}
+              onSelectNode={handleSelectNode}
+              onStartRoundWithFunction={onStartRoundWithFunction}
+              searchQuery={search}
+            />
+
+            {/* Interactive Hierarchy Legend */}
+            <GraphLegend
+              activeTypeFilter={typeFilter}
+              onSelectTypeFilter={setTypeFilter}
+            />
+
+            {/* Node Detail Inspector Panel */}
+            <NodeInspector
+              node={selectedNode}
+              onClose={() => setSelectedId(null)}
+              onFocusNode={handleFocusNode}
+              onStartRoundWithFunction={onStartRoundWithFunction}
+            />
+          </>
+        ) : viewMode === "canvas" ? (
           <>
             <GraphCanvas
               nodes={filteredNodes}
@@ -212,13 +238,11 @@ export function RepoGraphWorkspace({
               animate={animate}
             />
 
-            {/* Interactive Hierarchy Legend */}
             <GraphLegend
               activeTypeFilter={typeFilter}
               onSelectTypeFilter={setTypeFilter}
             />
 
-            {/* Node Detail Inspector Panel */}
             <NodeInspector
               node={selectedNode}
               onClose={() => setSelectedId(null)}

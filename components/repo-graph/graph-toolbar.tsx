@@ -17,8 +17,8 @@ export type GraphToolbarProps = {
   onToggleLabels: () => void;
   animate: boolean;
   onToggleAnimate: () => void;
-  viewMode: "graph" | "table";
-  onToggleViewMode: () => void;
+  viewMode: "git-graph" | "canvas" | "table";
+  onChangeViewMode: (mode: "git-graph" | "canvas" | "table") => void;
   nodeCount: number;
   edgeCount: number;
   onOpenShortcuts: () => void;
@@ -39,14 +39,14 @@ export function GraphToolbar({
   animate,
   onToggleAnimate,
   viewMode,
-  onToggleViewMode,
+  onChangeViewMode,
   nodeCount,
   edgeCount,
   onOpenShortcuts,
 }: GraphToolbarProps) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 bg-[#070a0f]/90 px-4 py-2.5 backdrop-blur-md">
-      {/* Left: Search & View Mode */}
+      {/* Left: Search & View Mode Switcher */}
       <div className="flex items-center gap-2">
         <div className="relative">
           <Input
@@ -65,14 +65,45 @@ export function GraphToolbar({
           )}
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onToggleViewMode}
-          className="h-8 border-zinc-800 bg-zinc-900/60 text-xs font-mono text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-        >
-          {viewMode === "graph" ? "▦ Accessible Table" : "☵ 3D Graph"}
-        </Button>
+        {/* View Mode Buttons */}
+        <div className="flex items-center rounded-lg border border-zinc-800 bg-zinc-950/80 p-0.5 text-xs font-mono">
+          <button
+            type="button"
+            onClick={() => onChangeViewMode("git-graph")}
+            className={`px-2.5 py-1 rounded-md transition-all font-semibold ${
+              viewMode === "git-graph"
+                ? "bg-[#0090ff] text-white shadow-sm"
+                : "text-zinc-400 hover:text-zinc-200"
+            }`}
+            title="Git Railway Graph (Recommended)"
+          >
+            ⑂ Git Graph
+          </button>
+          <button
+            type="button"
+            onClick={() => onChangeViewMode("table")}
+            className={`px-2 py-1 rounded-md transition-all ${
+              viewMode === "table"
+                ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                : "text-zinc-400 hover:text-zinc-200"
+            }`}
+            title="Accessible Table View"
+          >
+            ▦ Table
+          </button>
+          <button
+            type="button"
+            onClick={() => onChangeViewMode("canvas")}
+            className={`px-2 py-1 rounded-md transition-all ${
+              viewMode === "canvas"
+                ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                : "text-zinc-400 hover:text-zinc-200"
+            }`}
+            title="2D/3D Canvas View"
+          >
+            ☵ Canvas
+          </button>
+        </div>
       </div>
 
       {/* Center: Graph Stats Badge */}

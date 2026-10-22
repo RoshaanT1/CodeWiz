@@ -7,3 +7,4 @@ export * from "./graph-legend";
 export * from "./node-inspector";
 export * from "./accessible-table";
 export * from "./analysis-progress";
+export * from "./git-graph-view";
