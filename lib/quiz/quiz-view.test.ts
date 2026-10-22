@@ -11,6 +11,12 @@ describe("toQuizView", () => {
     expect(toQuizView([], "secret").explanation).toBeNull();
   });
 
+  it("keeps the same order whatever order the rows arrive in", () => {
+    const a = { ...row(null), id: "b" };
+    const b = { ...row(null), id: "a" };
+    expect(toQuizView([a, b], null).items.map((i) => i.id)).toEqual(toQuizView([b, a], null).items.map((i) => i.id));
+  });
+
   it("never includes rubrics", () => {
     const view = toQuizView([{ ...row(null), rubric: { key_points: ["x"] } } as never], null);
     expect(JSON.stringify(view)).not.toContain("key_points");

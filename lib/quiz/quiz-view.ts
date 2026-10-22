@@ -24,7 +24,8 @@ export type QuizItemRow = {
 const KINDS = new Set(["purpose", "behaviour", "edge_case", "impact"]);
 
 export function toQuizView(rows: readonly QuizItemRow[], explanation: string | null): QuizView {
-  const items = rows.map((row) => ({
+  // Sorted by id so the order is the same on first load and after a reload.
+  const items = [...rows].sort((a, b) => a.id.localeCompare(b.id)).map((row) => ({
     id: row.id,
     kind: (KINDS.has(row.kind ?? "") ? row.kind : "purpose") as QuizItemView["kind"],
     question: row.question ?? "",
