@@ -4,7 +4,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { callCounter } from "@/lib/ai/logged-llm";
 import { plantVerifiedBugs } from "@/lib/ai/plant-bugs";
+import { recordAiCalls } from "@/lib/ai/record-usage";
 import { requireApiAal2Session } from "@/lib/auth/session";
 import { bugTypesForLanguage } from "@/lib/bug-planter";
 import { weakBugTypes } from "@/lib/scoring/weak-bug-types";
@@ -108,13 +110,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const { data: skills } = await db.from("skill_scores").select("bug_type, attempts, caught").eq("user_id", userId);
   const weak = weakBugTypes(skills ?? [], bugTypesForLanguage(fn.language));
 
-  const planted = await plantVerifiedBugs({
-    code: fn.code,
-    language: fn.language,
-    startLine: fn.start_line,
-    count: bugCountFor(fn.end_line - fn.start_line + 1),
-    weakBugTypes: weak,
-  });
+  const calls = callCounter();
+  const planted = await plantVerifiedBugs(
+    {
+      code: fn.code,
+      language: fn.language,
+      startLine: fn.start_line,
+      count: bugCountFor(fn.end_line - fn.start_line + 1),
+      weakBugTypes: weak,
+    },
+    calls.onCall,
+  );
+  await recordAiCalls(db, userId, calls.count);
 
   const { data: inserted, error: insertError } = await db
     .from("drills")

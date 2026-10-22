@@ -2,15 +2,14 @@ import "server-only";
 
 import Parser from "web-tree-sitter";
 
-import { callJson } from "@/lib/ai/call-json";
+import { loggedLlm, type AiCallLog } from "@/lib/ai/logged-llm";
 import { plantBugs, type PlanterLanguage, type PlanterLlm, type PlantBugsOptions, type PlantBugsResult } from "@/lib/bug-planter";
 import { loadLanguage } from "@/lib/repo-indexer/parser-loader";
 
 /** Model adapter for the bug planter, using the shared provider wrapper. */
-export const planterLlm: PlanterLlm = async ({ systemPrompt, prompt, schema }) => {
-  const result = await callJson({ systemPrompt, prompt, schema, temperature: 0.7, maxTokens: 2000 });
-  return result.ok ? { ok: true, data: result.data } : { ok: false, reason: result.reason };
-};
+export function planterLlm(onCall?: (log: AiCallLog) => void): PlanterLlm {
+  return loggedLlm({ route: "drill", temperature: 0.7, maxTokens: 2000, onCall });
+}
 
 function dedent(code: string): string {
   const lines = code.split("\n");
@@ -63,6 +62,7 @@ export function makeParseCheck(original: string) {
 /** Plants and verifies bugs for one function with the app's model and parser. */
 export function plantVerifiedBugs(
   options: Omit<PlantBugsOptions, "llm" | "parse">,
+  onCall?: (log: AiCallLog) => void,
 ): Promise<PlantBugsResult> {
-  return plantBugs({ ...options, llm: planterLlm, parse: makeParseCheck(options.code) });
+  return plantBugs({ ...options, llm: planterLlm(onCall), parse: makeParseCheck(options.code) });
 }
