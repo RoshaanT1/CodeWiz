@@ -46,7 +46,14 @@ export async function loadWorkspace(userId: string): Promise<{ ok: true; data: {
 }
 
 export type RepoFunction = { id: string; name: string; file: string; category: string; importance: number; reviewed: boolean; eligible: boolean };
-export type RepoDetail = { id: string; owner: string; name: string; status: string; functions: RepoFunction[] };
+export type RepoDetail = {
+  id: string;
+  owner: string;
+  name: string;
+  status: string;
+  functions: RepoFunction[];
+  calls: { callerId: string; calleeId: string }[];
+};
 
 const FunctionRows = z.array(
   z.object({
@@ -74,7 +81,7 @@ export async function loadRepo(userId: string, repoId: string): Promise<{ ok: tr
   if (error) return { ok: false, reason: "Couldn't load this repo. Try again in a moment." };
   if (!repo) return { ok: true, data: null };
 
-  const [fns, scores] = await Promise.all([
+  const [fns, scores, calls] = await Promise.all([
     client.data
       .from("functions")
       .select("id, name, qualified_name, file_path, category, importance, excluded, explained")
@@ -83,6 +90,7 @@ export async function loadRepo(userId: string, repoId: string): Promise<{ ok: tr
       .order("importance", { ascending: false })
       .limit(500),
     client.data.from("understanding_scores").select("function_id").eq("user_id", userId),
+    client.data.from("function_calls").select("caller_id, callee_id").eq("user_id", userId).eq("repo_id", repoId).limit(10000),
   ]);
   if (fns.error) return { ok: false, reason: "Couldn't load this repo's functions." };
   const reviewed = new Set((scores.data ?? []).map((s: { function_id: string }) => s.function_id));
@@ -99,6 +107,7 @@ export async function loadRepo(userId: string, repoId: string): Promise<{ ok: tr
         reviewed: reviewed.has(f.id),
         eligible: !f.excluded && !f.explained,
       })),
+      calls: (calls.data ?? []).map((c: { caller_id: string; callee_id: string }) => ({ callerId: c.caller_id, calleeId: c.callee_id })),
     },
   };
 }

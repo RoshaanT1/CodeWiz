@@ -4,7 +4,8 @@ import { CheckCircle2, Loader2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { EmptyState, PageTitle } from "@/components/app-shell/page-parts";
+import { EmptyState, PageTitle, SectionTitle } from "@/components/app-shell/page-parts";
+import { CallMap, type Category } from "@/components/call-map";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,11 @@ export function LiveRepo({ repo }: { repo: RepoDetail }) {
   const [size, setSize] = useState<(typeof SIZES)[number]>(3);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState(repo.functions[0]?.id ?? "");
+  const mapFunctions = useMemo(
+    () => repo.functions.map((f) => ({ id: f.id, name: f.name, file: f.file, category: f.category as Category })),
+    [repo.functions],
+  );
 
   const shown = useMemo(
     () =>
@@ -87,6 +93,26 @@ export function LiveRepo({ repo }: { repo: RepoDetail }) {
             )}
           </section>
 
+          <section className="mb-7">
+            <SectionTitle aside={<span className="text-xs text-muted-foreground">Click a function to move the map</span>}>Call map</SectionTitle>
+            <div className="h-[360px] overflow-hidden rounded-md border bg-card">
+              <CallMap functions={mapFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} maxNodes={12} />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+              {[
+                ["entry", "#2563eb"],
+                ["core", "#059669"],
+                ["data", "#d97706"],
+                ["helper", "#6b7280"],
+              ].map(([name, color]) => (
+                <span key={name} className="flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
+                  {name}
+                </span>
+              ))}
+            </div>
+          </section>
+
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-1">
               {CATEGORIES.map((c) => (
@@ -106,7 +132,13 @@ export function LiveRepo({ repo }: { repo: RepoDetail }) {
           ) : (
             <div className="divide-y overflow-hidden rounded-md border bg-card">
               {shown.slice(0, 200).map((f) => (
-                <div key={f.id} className="flex items-center justify-between gap-3 px-4 py-2.5" data-testid={`function-row-${f.id}`}>
+                <button
+                  type="button"
+                  key={f.id}
+                  onClick={() => setSelectedId(f.id)}
+                  className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-muted/50 ${selectedId === f.id ? "bg-accent" : ""}`}
+                  data-testid={`function-row-${f.id}`}
+                >
                   <span className="min-w-0">
                     <span className="flex items-center gap-2 text-sm font-medium">
                       <span className="truncate">{f.name}</span>
@@ -119,7 +151,7 @@ export function LiveRepo({ repo }: { repo: RepoDetail }) {
                     <Badge variant="outline">{f.category}</Badge>
                     <span className="w-10 text-right font-mono text-xs text-muted-foreground">{f.importance.toFixed(1)}</span>
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           )}

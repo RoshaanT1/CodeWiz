@@ -1,5 +1,3 @@
-<!-- Written before the code, from the plan in docs/GIGS.md. Check and update it when MAP-2 is done. -->
-
 # React Call Map
 
 A React component that shows a function's callers and callees as an interactive graph. Click any node to move the view to that function. Built on React Flow.
@@ -22,11 +20,7 @@ It does no data fetching. You pass in your functions and calls as props, so it w
 npm install @xyflow/react
 ```
 
-3. Import React Flow's stylesheet once, for example in your root layout:
-
-```tsx
-import "@xyflow/react/dist/style.css";
-```
+The component imports React Flow's stylesheet itself, so there's nothing else to set up.
 
 ## Usage
 
@@ -34,7 +28,7 @@ import "@xyflow/react/dist/style.css";
 "use client";
 
 import { useState } from "react";
-import { CallMap, type CallMapFunction, type CallMapCall } from "@/components/call-map";
+import { CallMap, type CallMapCall, type CallMapFunction } from "@/components/call-map";
 
 const functions: CallMapFunction[] = [
   { id: "a", name: "handleLogin", file: "app/api/login/route.ts", category: "entry" },
@@ -105,7 +99,8 @@ Calls that point to an `id` not in `functions` are ignored.
 
 - Shows one step out from the selected function in each direction. Large graphs get slow and hard to read, so it never draws the whole graph at once.
 - If a function has more callers or callees than `maxNodes`, the extra ones are left out and the map shows how many were hidden.
-- Recursive calls (a function calling itself) are shown as a single loop on the selected node.
+- Recursive calls (a function calling itself) are marked with ↻ on the selected node.
+- Nodes can't be dragged; the view pans and zooms, and refits when the selection changes.
 
 ## Dependencies
 
