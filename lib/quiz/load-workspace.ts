@@ -45,7 +45,16 @@ export async function loadWorkspace(userId: string): Promise<{ ok: true; data: {
   };
 }
 
-export type RepoFunction = { id: string; name: string; file: string; category: string; importance: number; reviewed: boolean; eligible: boolean };
+export type RepoFunction = {
+  id: string;
+  name: string;
+  file: string;
+  category: string;
+  importance: number;
+  reviewed: boolean;
+  eligible: boolean;
+  metrics: { length: number; branches: number; callers: number; callees: number; dataAccess: boolean };
+};
 export type RepoDetail = {
   id: string;
   owner: string;
@@ -65,6 +74,11 @@ const FunctionRows = z.array(
     importance: z.number().nullable(),
     excluded: z.boolean(),
     explained: z.boolean(),
+    length: z.number().nullable(),
+    branches: z.number().nullable(),
+    callers: z.number().nullable(),
+    callees: z.number().nullable(),
+    data_access: z.boolean(),
   }),
 );
 
@@ -84,7 +98,7 @@ export async function loadRepo(userId: string, repoId: string): Promise<{ ok: tr
   const [fns, scores, calls] = await Promise.all([
     client.data
       .from("functions")
-      .select("id, name, qualified_name, file_path, category, importance, excluded, explained")
+      .select("id, name, qualified_name, file_path, category, importance, excluded, explained, length, branches, callers, callees, data_access")
       .eq("user_id", userId)
       .eq("repo_id", repoId)
       .order("importance", { ascending: false })
@@ -106,6 +120,13 @@ export async function loadRepo(userId: string, repoId: string): Promise<{ ok: tr
         importance: f.importance ?? 0,
         reviewed: reviewed.has(f.id),
         eligible: !f.excluded && !f.explained,
+        metrics: {
+          length: f.length ?? 0,
+          branches: f.branches ?? 0,
+          callers: f.callers ?? 0,
+          callees: f.callees ?? 0,
+          dataAccess: f.data_access,
+        },
       })),
       calls: (calls.data ?? []).map((c: { caller_id: string; callee_id: string }) => ({ callerId: c.caller_id, calleeId: c.callee_id })),
     },

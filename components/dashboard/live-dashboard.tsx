@@ -90,7 +90,7 @@ export function LiveDashboard({ name, repos, rounds }: { name: string; repos: Wo
       </section>
 
       <section className="mb-9">
-        <SectionTitle aside={<span className="text-xs text-muted-foreground">{repos.length} repositories</span>}>Your repositories</SectionTitle>
+        <SectionTitle aside={<span className="text-xs text-muted-foreground">{repos.length} {repos.length === 1 ? "repository" : "repositories"}</span>}>Your repositories</SectionTitle>
         {repos.length === 0 ? (
           <EmptyState title="No repositories yet" text="Import one above to get started." />
         ) : (
