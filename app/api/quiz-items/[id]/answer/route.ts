@@ -1,0 +1,111 @@
+// POST /api/quiz-items/[id]/answer: grades one answer against its rubric
+// (AI step C). An empty answer scores 0 without a model call. Once every
+// question for the function is answered, the explanation is returned too.
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import { callCounter, loggedLlm } from "@/lib/ai/logged-llm";
+import { buildGradeAnswerPrompt } from "@/lib/ai/prompts/quiz-pack";
+import { recordAiCalls } from "@/lib/ai/record-usage";
+import { GradeAnswerSchema } from "@/lib/ai/schemas/quiz-pack";
+import { requireApiAal2Session } from "@/lib/auth/session";
+import { toQuizView, type QuizItemRow } from "@/lib/quiz/quiz-view";
+import { createClient } from "@/lib/supabase/server";
+
+export const runtime = "nodejs";
+export const maxDuration = 30;
+
+type ErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND" | "SERVER_CONFIG" | "UPSTREAM";
+
+function error(code: ErrorCode, message: string, status: number) {
+  return NextResponse.json({ ok: false as const, error: { code, message } }, { status });
+}
+
+const ParamsSchema = z.object({ id: z.uuid() });
+const BodySchema = z.object({ answer: z.string().max(3000, "Keep your answer under 3000 characters.") });
+
+const ItemSchema = z.object({
+  id: z.string(),
+  round_function_id: z.string(),
+  question: z.string().nullable(),
+  answer: z.string().nullable(),
+  rubric: z.object({ key_points: z.array(z.string()), full_credit: z.string(), partial_credit: z.string() }),
+  round_functions: z.object({
+    functions: z.object({ id: z.string(), code: z.string(), start_line: z.number(), explanation: z.string().nullable() }),
+  }),
+});
+
+const ITEM_COLUMNS = "id, kind, question, answer, score, feedback";
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await requireApiAal2Session();
+  if (!session.ok) {
+    return error(session.status === 401 ? "UNAUTHORIZED" : session.status === 403 ? "FORBIDDEN" : "UPSTREAM", session.reason, session.status);
+  }
+  const userId = session.data.id;
+
+  const parsedParams = ParamsSchema.safeParse(await params);
+  if (!parsedParams.success) return error("BAD_REQUEST", "That question id isn't valid.", 400);
+
+  let answer: string;
+  try {
+    const body = BodySchema.safeParse(await request.json());
+    if (!body.success) return error("BAD_REQUEST", body.error.issues[0]?.message ?? "Send { answer }.", 400);
+    answer = body.data.answer.trim();
+  } catch {
+    return error("BAD_REQUEST", "Send your answer as JSON.", 400);
+  }
+
+  const client = await createClient();
+  if (!client.ok) return error("SERVER_CONFIG", client.reason, 500);
+  const db = client.data;
+
+  const { data: itemData, error: itemError } = await db
+    .from("quiz_items")
+    .select("id, round_function_id, question, answer, rubric, round_functions(functions(id, code, start_line, explanation))")
+    .eq("id", parsedParams.data.id)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (itemError) return error("UPSTREAM", "Couldn't load this question. Try again.", 502);
+  if (!itemData) return error("NOT_FOUND", "We couldn't find that question.", 404);
+  const item = ItemSchema.safeParse(itemData);
+  if (!item.success) return error("UPSTREAM", "This question's data is incomplete.", 502);
+  const fn = item.data.round_functions.functions;
+
+  let missedPoints: string[] = [];
+  if (item.data.answer === null) {
+    let score = 0;
+    let feedback = "No answer was given, so this question scores 0.";
+    if (answer) {
+      const calls = callCounter();
+      const llm = loggedLlm({ route: "quiz-answer", temperature: 0.1, maxTokens: 400, onCall: calls.onCall });
+      const graded = await llm({
+        ...buildGradeAnswerPrompt({ question: item.data.question ?? "", rubric: item.data.rubric, code: fn.code, startLine: fn.start_line, answer }),
+        schema: GradeAnswerSchema,
+      });
+      await recordAiCalls(db, userId, calls.count);
+      if (!graded.ok) return error("UPSTREAM", "We couldn't grade that answer. Try again.", 502);
+      score = graded.data.score;
+      feedback = graded.data.feedback;
+      missedPoints = graded.data.missed_points;
+    } else {
+      missedPoints = item.data.rubric.key_points;
+    }
+    const { error: updateError } = await db
+      .from("quiz_items")
+      .update({ answer, score, feedback })
+      .eq("id", item.data.id)
+      .eq("user_id", userId)
+      .is("answer", null);
+    if (updateError) return error("UPSTREAM", "Couldn't save your answer. Try again.", 502);
+  }
+
+  const { data: rows } = await db
+    .from("quiz_items")
+    .select(ITEM_COLUMNS)
+    .eq("round_function_id", item.data.round_function_id)
+    .eq("user_id", userId)
+    .order("id");
+  const view = toQuizView((rows ?? []) as QuizItemRow[], fn.explanation);
+  return NextResponse.json({ ok: true as const, data: { ...view, answeredId: item.data.id, missedPoints } });
+}

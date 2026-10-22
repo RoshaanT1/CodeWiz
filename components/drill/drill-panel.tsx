@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { postJson, postOnce } from "@/lib/client/post-json";
 import type { DrillResult } from "@/lib/grading/drill-result";
 
 import { DrillResults } from "./drill-results";
@@ -25,22 +26,6 @@ type Props = {
   /** Called once the drill is graded, or skipped, so the round can move on. */
   onDone?: (result: DrillResult | null) => void;
 };
-
-type ApiResponse<T> = { ok: true; data: T } | { ok: false; error: { message: string } };
-
-async function postJson<T>(url: string, body?: unknown): Promise<{ ok: true; data: T } | { ok: false; message: string }> {
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const json = (await res.json()) as ApiResponse<T>;
-    return json.ok ? { ok: true, data: json.data } : { ok: false, message: json.error.message };
-  } catch {
-    return { ok: false, message: "Couldn't reach the server. Check your connection and try again." };
-  }
-}
 
 const flagsKey = (drillId: string) => `codewiz:drill-flags:${drillId}`;
 
@@ -85,7 +70,7 @@ export function DrillPanel({ roundFunctionId, onDone }: Props) {
   const load = useCallback(async () => {
     setLoadError(null);
     setDrill(null);
-    const res = await postJson<DrillView>(`/api/round-functions/${roundFunctionId}/drill`);
+    const res = await postOnce<DrillView>(`/api/round-functions/${roundFunctionId}/drill`);
     if (!res.ok) {
       setLoadError(res.message);
       return;

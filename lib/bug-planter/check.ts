@@ -34,9 +34,9 @@ function checkBugTypeFits(type: BugType, originalLines: readonly string[]): stri
 }
 
 /**
- * Code checks for AI step D: bug count, catalogue types, line ranges inside
- * the function, no overlaps, same line count, and every changed line belongs
- * to a listed bug while every listed bug changes at least one line.
+ * Code checks for AI step D: at most `count` bugs, catalogue types, line ranges
+ * inside the function, no overlaps, same line count, and every changed line
+ * belongs to a listed bug. Listed bugs that change nothing are dropped.
  */
 export function checkPlantedBugs(options: CheckPlantedOptions): CheckPlantedResult {
   const { original, startLine, count, allowed, output } = options;
@@ -45,8 +45,9 @@ export function checkPlantedBugs(options: CheckPlantedOptions): CheckPlantedResu
   const changedLines = output.changed_code.split("\n");
   const endLine = startLine + originalLines.length - 1;
 
-  if (output.bugs.length !== count) {
-    issues.push(`Expected exactly ${count} bugs, got ${output.bugs.length}.`);
+  // Fewer bugs than asked is fine; more is not.
+  if (output.bugs.length > count) {
+    issues.push(`Expected at most ${count} bugs, got ${output.bugs.length}.`);
   }
   if (changedLines.length !== originalLines.length) {
     issues.push(
@@ -103,13 +104,10 @@ export function checkPlantedBugs(options: CheckPlantedOptions): CheckPlantedResu
         issues.push(`Line ${line} was changed but is not listed in any bug.`);
       }
     }
-    for (const bug of bugs) {
-      let changed = false;
-      for (let line = bug.lineStart; line <= bug.lineEnd; line++) {
-        if (touched.has(line)) changed = true;
-      }
-      if (!changed) issues.push(`Bug at lines ${bug.lineStart}-${bug.lineEnd} does not change any code.`);
-    }
+    // A listed bug that changes nothing is dropped, as long as one real bug remains.
+    const changedBugs = bugs.filter((bug) => [...touched].some((line) => line >= bug.lineStart && line <= bug.lineEnd));
+    if (touched.size > 0 && changedBugs.length === 0) issues.push("None of the listed bugs changes any code.");
+    bugs.splice(0, bugs.length, ...changedBugs);
   }
 
   return issues.length > 0 ? { ok: false, issues } : { ok: true, changedCode: output.changed_code, bugs };

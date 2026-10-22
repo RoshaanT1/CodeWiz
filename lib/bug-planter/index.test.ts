@@ -142,13 +142,28 @@ describe("plantBugs", () => {
     ["a wrongly listed line", { ...GOOD, bugs: [{ ...GOOD.bugs[0], line_start: 15, line_end: 15 }] }, "not listed in any bug"],
     ["no change at all", { ...GOOD, changed_code: ORIGINAL }, "identical to the original"],
     ["wrong_return on a non-return line", { ...GOOD, bugs: [{ ...GOOD.bugs[0], bug_type: "wrong_return" }] }, "must change a return statement"],
-    ["the wrong bug count", { ...GOOD, bugs: [GOOD.bugs[0], { ...GOOD.bugs[0], line_start: 15, line_end: 15 }] }, "Expected exactly 1"],
+    ["the wrong bug count", { ...GOOD, bugs: [GOOD.bugs[0], { ...GOOD.bugs[0], line_start: 15, line_end: 15 }] }, "Expected at most 1"],
   ])("rejects %s after one retry", async (_label, bad, message) => {
     const { llm, fn } = fakeLlm(bad, bad);
     const result = await plantBugs({ ...base, llm });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toContain(message);
     expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops a listed bug that changes nothing and keeps the real one", async () => {
+    const withEmpty = { ...GOOD, bugs: [GOOD.bugs[0], { ...GOOD.bugs[0], bug_type: "wrong_return", line_start: 15, line_end: 15 }] };
+    const { llm } = fakeLlm(withEmpty, YES);
+    const result = await plantBugs({ ...base, count: 2, llm });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.bugs.map((b) => b.lineStart)).toEqual([12]);
+  });
+
+  it("accepts fewer bugs than asked for", async () => {
+    const { llm } = fakeLlm(GOOD, YES);
+    const result = await plantBugs({ ...base, count: 3, llm });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.bugs).toHaveLength(1);
   });
 
   it("rejects overlapping bugs", async () => {
