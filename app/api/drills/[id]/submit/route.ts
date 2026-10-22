@@ -1,6 +1,7 @@
 // POST /api/drills/[id]/submit: grades the user's flags against the answer
-// key (GRADE-1), scores each catch's comment (AI step F), stores findings,
-// updates the skill profile, then reveals the answer key.
+// key (GRADE-1), scores each catch's comment (AI step F), checks unmatched
+// flags for real bugs (AI step G), stores findings, updates the skill
+// profile, then reveals the answer key.
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -10,6 +11,8 @@ import { requireApiAal2Session } from "@/lib/auth/session";
 import { buildDrillResult, type BugRow, type FindingRow } from "@/lib/grading/drill-result";
 import { caughtBugIds, matchFlags } from "@/lib/grading/match-flags";
 import { scoreExplanation } from "@/lib/grading/score-explanation";
+import { checkFlag } from "@/lib/real-bug-check/check-flag";
+import { makeRepoTools } from "@/lib/real-bug-check/repo-tools";
 import { addDrillToSkills } from "@/lib/scoring/skill-profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -25,6 +28,8 @@ function error(code: ErrorCode, message: string, status: number) {
 
 const ParamsSchema = z.object({ id: z.uuid() });
 
+const MAX_REAL_BUG_CHECKS = 3;
+
 const BodySchema = z.object({
   flags: z
     .array(z.object({ line: z.number().int().positive(), comment: z.string().trim().max(1000) }))
@@ -36,7 +41,16 @@ const DrillSchema = z.object({
   changed_code: z.string().nullable(),
   status: z.string().nullable(),
   round_functions: z.object({
-    functions: z.object({ code: z.string(), start_line: z.number().int(), end_line: z.number().int() }),
+    functions: z.object({
+      id: z.string(),
+      repo_id: z.string(),
+      name: z.string(),
+      qualified_name: z.string().nullable(),
+      file_path: z.string(),
+      code: z.string(),
+      start_line: z.number().int(),
+      end_line: z.number().int(),
+    }),
   }),
 });
 
@@ -86,7 +100,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: drillData, error: drillError } = await db
     .from("drills")
-    .select("id, changed_code, status, round_functions(functions(code, start_line, end_line))")
+    .select("id, changed_code, status, round_functions(functions(id, repo_id, name, qualified_name, file_path, code, start_line, end_line))")
     .eq("id", drillId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -135,16 +149,40 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const llm = loggedLlm({ route: "drill-submit", temperature: 0.1, maxTokens: 400, onCall: calls.onCall });
   const changedLines = changedCode.split("\n");
 
+  // AI step G runs on the first few unmatched flags only, to cap the cost.
+  const repoTools = makeRepoTools(db, userId, fn.repo_id);
+  const startFunction = repoTools.toFunction({ ...fn, qualified_name: fn.qualified_name });
+  const checkLlm = loggedLlm({ route: "drill-real-bug", temperature: 0.1, maxTokens: 500, onCall: calls.onCall });
+  const toCheck = new Set(matches.filter((m) => m.outcome === "unmatched").slice(0, MAX_REAL_BUG_CHECKS).map((m) => m.flag));
+  const evidenceByLine = new Map<number, { function_id: string; line: number }[]>();
+
   const findings: FindingRow[] = await Promise.all(
     matches.map(async (match): Promise<FindingRow> => {
       if (match.outcome === "unmatched") {
-        return {
+        const falseAlarm: FindingRow = {
           line: match.flag.line,
           comment: match.flag.comment,
           outcome: "false_alarm",
           planted_bug_id: null,
           explanation_score: null,
           feedback: "No planted bug was on or next to this line.",
+        };
+        if (!toCheck.has(match.flag)) return falseAlarm;
+        const checked = await checkFlag({ fn: startFunction, flagLine: match.flag.line, comment: match.flag.comment }, { llm: checkLlm, tools: repoTools.tools });
+        if (!checked.ok) return falseAlarm;
+        if (checked.data.verdict === "possible_real_bug") {
+          evidenceByLine.set(
+            match.flag.line,
+            checked.data.evidence.flatMap((e) => {
+              const id = repoTools.idOf(e.alias);
+              return id ? [{ function_id: id, line: e.line }] : [];
+            }),
+          );
+        }
+        return {
+          ...falseAlarm,
+          outcome: checked.data.verdict,
+          feedback: `${checked.data.verdict === "possible_real_bug" ? "Possible real bug (AI check, not confirmed): " : "No planted bug here. "}${checked.data.reason}`,
         };
       }
       const bug = bugs.find((b) => b.id === match.bugId);
@@ -176,7 +214,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (findings.length > 0) {
     const { error: insertError } = await db
       .from("findings")
-      .insert(findings.map((f) => ({ ...f, user_id: userId, drill_id: drillId, evidence: null })));
+      .insert(findings.map((f) => ({ ...f, user_id: userId, drill_id: drillId, evidence: evidenceByLine.get(f.line) ?? null })));
     if (insertError) return error("UPSTREAM", "Couldn't save your flags. Try again.", 502);
   }
 
