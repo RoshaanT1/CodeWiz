@@ -16,6 +16,9 @@ const ORIGINAL = [
 
 const BUGGY = ORIGINAL.replace("i < items.length", "i <= items.length");
 
+const YES = { bugs: [{ changes_behaviour: true, why: "An empty list returns NaN instead of 0." }] };
+const NO = { bugs: [{ changes_behaviour: false, why: "The change is equivalent for every input." }] };
+
 const GOOD = {
   changed_code: BUGGY,
   bugs: [
@@ -95,7 +98,7 @@ describe("buildPlantBugsPrompt", () => {
 
 describe("plantBugs", () => {
   it("returns the changed code and camelCase bugs for a valid answer", async () => {
-    const { llm, fn } = fakeLlm(GOOD);
+    const { llm, fn } = fakeLlm(GOOD, YES);
     const result = await plantBugs({ ...base, llm });
     expect(result).toEqual({
       ok: true,
@@ -110,7 +113,7 @@ describe("plantBugs", () => {
         },
       ],
     });
-    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 
   it("rejects bad input without calling the model", async () => {
@@ -123,10 +126,10 @@ describe("plantBugs", () => {
 
   it("retries once with the issues, then succeeds", async () => {
     const added = { ...GOOD, changed_code: `${BUGGY}\n// extra` };
-    const { llm, fn, calls } = fakeLlm(added, GOOD);
+    const { llm, fn, calls } = fakeLlm(added, GOOD, YES);
     const result = await plantBugs({ ...base, llm });
     expect(result.ok).toBe(true);
-    expect(fn).toHaveBeenCalledTimes(2);
+    expect(fn).toHaveBeenCalledTimes(3);
     expect(calls[1]).toContain("previous answer was rejected");
     expect(calls[1]).toContain("changed_code has 8 lines");
   });
@@ -138,6 +141,7 @@ describe("plantBugs", () => {
     ["lines outside the function", { ...GOOD, bugs: [{ ...GOOD.bugs[0], line_start: 3, line_end: 3 }] }, "outside 10-16"],
     ["a wrongly listed line", { ...GOOD, bugs: [{ ...GOOD.bugs[0], line_start: 15, line_end: 15 }] }, "not listed in any bug"],
     ["no change at all", { ...GOOD, changed_code: ORIGINAL }, "identical to the original"],
+    ["wrong_return on a non-return line", { ...GOOD, bugs: [{ ...GOOD.bugs[0], bug_type: "wrong_return" }] }, "must change a return statement"],
     ["the wrong bug count", { ...GOOD, bugs: [GOOD.bugs[0], { ...GOOD.bugs[0], line_start: 15, line_end: 15 }] }, "Expected exactly 1"],
   ])("rejects %s after one retry", async (_label, bad, message) => {
     const { llm, fn } = fakeLlm(bad, bad);
@@ -153,7 +157,7 @@ describe("plantBugs", () => {
       changed_code: twoLines,
       bugs: [
         { ...GOOD.bugs[0], line_start: 12, line_end: 13 },
-        { ...GOOD.bugs[0], bug_type: "wrong_return", line_start: 13, line_end: 13 },
+        { ...GOOD.bugs[0], bug_type: "wrong_variable", line_start: 13, line_end: 13 },
       ],
     };
     const { llm } = fakeLlm(overlapping, overlapping);
@@ -175,5 +179,55 @@ describe("plantBugs", () => {
     const { llm } = fakeLlm({ not: "valid" });
     const result = await plantBugs({ ...base, llm });
     expect(result).toEqual({ ok: false, reason: "Model call failed: schema mismatch" });
+  });
+
+  describe("behaviour check (contract E)", () => {
+    const TWO_BUGS = BUGGY.replace("return total;", "return total + 1;");
+    const TWO = {
+      changed_code: TWO_BUGS,
+      bugs: [
+        GOOD.bugs[0],
+        { line_start: 15, line_end: 15, bug_type: "wrong_return", explanation: "Adds one to every sum.", fix: "  return total;" },
+      ],
+    };
+
+    it("sends original and changed lines for each bug", async () => {
+      const { llm, calls } = fakeLlm(TWO, { bugs: [YES.bugs[0], YES.bugs[0]] });
+      await plantBugs({ ...base, count: 2, llm });
+      expect(calls[1]).toContain("CHANGE 2 (lines 15-15)");
+      expect(calls[1]).toContain("15:   return total;");
+      expect(calls[1]).toContain("15:   return total + 1;");
+    });
+
+    it("drops a bug marked false and restores its original line", async () => {
+      const { llm } = fakeLlm(TWO, { bugs: [YES.bugs[0], NO.bugs[0]] });
+      const result = await plantBugs({ ...base, count: 2, llm });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.changedCode).toBe(BUGGY);
+      expect(result.bugs.map((b) => b.lineStart)).toEqual([12]);
+    });
+
+    it("regenerates once when no bug changes behaviour", async () => {
+      const { llm, fn, calls } = fakeLlm(GOOD, NO, GOOD, YES);
+      const result = await plantBugs({ ...base, llm });
+      expect(result.ok).toBe(true);
+      expect(fn).toHaveBeenCalledTimes(4);
+      expect(calls[2]).toContain("None of the bugs changed behaviour");
+    });
+
+    it("fails after the retry when still no bug changes behaviour", async () => {
+      const { llm, fn } = fakeLlm(GOOD, NO, GOOD, NO);
+      const result = await plantBugs({ ...base, llm });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.reason).toContain("None of the bugs changed behaviour");
+      expect(fn).toHaveBeenCalledTimes(4);
+    });
+
+    it("fails when the verdict count does not match the bugs", async () => {
+      const { llm } = fakeLlm(TWO, YES);
+      const result = await plantBugs({ ...base, count: 2, llm });
+      expect(result).toEqual({ ok: false, reason: "Behaviour check returned 1 verdicts for 2 bugs." });
+    });
   });
 });
