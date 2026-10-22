@@ -5,9 +5,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { callCounter, loggedLlm } from "@/lib/ai/logged-llm";
+import { callCounter, loggedLlm, type JsonLlm } from "@/lib/ai/logged-llm";
 import { recordAiCalls } from "@/lib/ai/record-usage";
 import { requireApiAal2Session } from "@/lib/auth/session";
+import { checkAiCap } from "@/lib/server/daily-cap";
 import { buildDrillResult, type BugRow, type FindingRow } from "@/lib/grading/drill-result";
 import { caughtBugIds, matchFlags } from "@/lib/grading/match-flags";
 import { scoreExplanation } from "@/lib/grading/score-explanation";
@@ -146,13 +147,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     bugs.map((b) => ({ id: b.id, lineStart: b.line_start, lineEnd: b.line_end })),
   );
   const calls = callCounter();
-  const llm = loggedLlm({ route: "drill-submit", temperature: 0.1, maxTokens: 400, onCall: calls.onCall });
+  // Over the daily AI cap the drill is still graded: catches count, but
+  // comments aren't scored and unmatched flags aren't checked.
+  const capped = !(await checkAiCap(db, userId)).ok;
+  const noAi: JsonLlm = async () => ({ ok: false, reason: "daily AI limit reached" });
+  const llm = capped ? noAi : loggedLlm({ route: "drill-submit", temperature: 0.1, maxTokens: 400, onCall: calls.onCall });
   const changedLines = changedCode.split("\n");
 
   // AI step G runs on the first few unmatched flags only, to cap the cost.
   const repoTools = makeRepoTools(db, userId, fn.repo_id);
   const startFunction = repoTools.toFunction({ ...fn, qualified_name: fn.qualified_name });
-  const checkLlm = loggedLlm({ route: "drill-real-bug", temperature: 0.1, maxTokens: 500, onCall: calls.onCall });
+  const checkLlm = capped ? noAi : loggedLlm({ route: "drill-real-bug", temperature: 0.1, maxTokens: 500, onCall: calls.onCall });
   const toCheck = new Set(matches.filter((m) => m.outcome === "unmatched").slice(0, MAX_REAL_BUG_CHECKS).map((m) => m.flag));
   const evidenceByLine = new Map<number, { function_id: string; line: number }[]>();
 

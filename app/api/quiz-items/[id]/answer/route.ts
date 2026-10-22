@@ -9,13 +9,14 @@ import { buildGradeAnswerPrompt } from "@/lib/ai/prompts/quiz-pack";
 import { recordAiCalls } from "@/lib/ai/record-usage";
 import { GradeAnswerSchema } from "@/lib/ai/schemas/quiz-pack";
 import { requireApiAal2Session } from "@/lib/auth/session";
+import { checkAiCap } from "@/lib/server/daily-cap";
 import { toQuizView, type QuizItemRow } from "@/lib/quiz/quiz-view";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-type ErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND" | "SERVER_CONFIG" | "UPSTREAM";
+type ErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND" | "SERVER_CONFIG" | "UPSTREAM" | "RATE_LIMITED";
 
 function error(code: ErrorCode, message: string, status: number) {
   return NextResponse.json({ ok: false as const, error: { code, message } }, { status });
@@ -77,6 +78,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     let score = 0;
     let feedback = "No answer was given, so this question scores 0.";
     if (answer) {
+      const cap = await checkAiCap(db, userId);
+      if (!cap.ok) return error("RATE_LIMITED", cap.reason, 429);
+
       const calls = callCounter();
       const llm = loggedLlm({ route: "quiz-answer", temperature: 0.1, maxTokens: 400, onCall: calls.onCall });
       const graded = await llm({
