@@ -1,51 +1,73 @@
-# React Call Map: callers and callees graph
+# Gig 6 — React Call Map
 
-## Description
+## What it is
 
-A React component that shows a function's callers and callees as an interactive graph, coloured by category. Click a node to move the view to it. Built on React Flow.
+A React component that shows a function's callers and callees as an interactive graph. It is built on React Flow and does no data fetching of its own. You pass functions and calls as props, so it works with any data source.
 
-## Skills
+## Files
 
-React, TypeScript, Next.js
+| File | Purpose |
+|---|---|
+| `components/call-map/index.tsx` | Public entry point — exports `CallMap`, `CallMapFunction`, `CallMapCall`, `Category` |
+| `components/call-map/build-graph.ts` | Pure function that turns props into React Flow nodes and edges |
+| `components/call-map/function-node.tsx` | Custom React Flow node — renders the function card |
+| `components/call-map/README.md` | README for Devmarketplace (install, usage, props, data shapes) |
 
-## Custom tags
+## Code snippet (TypeScript)
 
-React Flow, graph, call graph, visualisation, code navigation
+```tsx
+"use client";
 
-## Code snippet
+import { useState } from "react";
+import { CallMap } from "@/components/call-map";
+import type { CallMapFunction, CallMapCall } from "@/components/call-map";
 
-TypeScript (TSX), from `components/call-map/README.md`, lines 28 to 59 (the Usage example).
+const functions: CallMapFunction[] = [
+  { id: "a", name: "handleLogin",    file: "app/api/login/route.ts", category: "entry" },
+  { id: "b", name: "verifyPassword", file: "lib/auth.ts",            category: "core"  },
+  { id: "c", name: "getUserByEmail", file: "lib/db.ts",              category: "data"  },
+  { id: "d", name: "hashPassword",   file: "lib/crypto.ts",          category: "helper"},
+];
 
-## Files to upload
+const calls: CallMapCall[] = [
+  { callerId: "a", calleeId: "b" },
+  { callerId: "b", calleeId: "c" },
+  { callerId: "b", calleeId: "d" },
+];
 
-From `components/call-map/`: `call-map-graph.tsx`, `index.ts`, `README.md`. Leave out `call-map.tsx`, the old demo list view.
+export default function Example() {
+  const [selectedId, setSelectedId] = useState("b");
 
-## Read ME
+  return (
+    <div style={{ height: 480 }}>
+      <CallMap
+        functions={functions}
+        calls={calls}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+      />
+    </div>
+  );
+}
+```
 
-`components/call-map/README.md`
+## Devmarketplace form fields
 
-## GIG READY block
+| Field | Value |
+|---|---|
+| **Title** | React Call Map: callers and callees graph |
+| **Description** | A React component that shows a function's callers and callees as an interactive graph, coloured by category. Click a node to move the view to it. Built on React Flow. |
+| **Skills** | React, TypeScript, Next.js |
+| **Custom tags** | React Flow, graph, call graph, visualisation, code navigation |
+| **Code snippet language** | TypeScript |
+| **Code snippet** | The `<CallMap />` block above |
+| **README** | `components/call-map/README.md` — open on GitHub, copy the rendered page and paste into the rich-text editor |
+| **Thumbnail** | `docs/gigs/thumbnails/react-call-map.png` |
 
-    GIG READY: 6. React Call Map
-    Publish at Devmarketplace → Add your Gigs
+## Dependencies added
 
-    1. Thumbnail
-       Upload docs/gigs/thumbnails/react-call-map.png
+| Package | Licence | Version pinned |
+|---|---|---|
+| `@xyflow/react` | MIT | ^12.x (installed via `npm install @xyflow/react`) |
 
-    2. Basic Info
-       Title (41/50): React Call Map: callers and callees graph
-       Description (166/200): A React component that shows a function's callers and callees as an interactive graph, coloured by category. Click a node to move the view to it. Built on React Flow.
-
-    3. Tech Stack
-       Skills (pick the closest ones in the list): React, TypeScript, Next.js
-       Custom tags (5/10, press Enter after each): React Flow, graph, call graph, visualisation, code navigation
-
-    4. Code Snippet
-       Language: TypeScript
-       From: components/call-map/README.md, lines 28 to 59
-
-    5. Read ME
-       Open components/call-map/README.md on GitHub, copy the rendered page and paste it into the editor.
-
-    6. After you click Create
-       Add the gig link to the tracker in docs/GIGS.md and to the Devpost draft.
+Added to `AI_DISCLOSURE.md` under "Libraries".

@@ -20,17 +20,9 @@ const llmReturning = (data: unknown) => vi.fn(async () => ({ ok: true as const, 
 
 const verified = (exists: boolean, ok = exists) =>
   vi.fn(async () => ({
-    ok: true as const,
-    data: {
-      ecosystem: "npm" as const,
-      package: "debounce",
-      functionName: "debounce",
-      exists,
-      functionFound: ok,
-      foundIn: ok ? ("readme" as const) : null,
-      verified: ok,
-      docsUrl: exists ? "https://github.com/sindresorhus/debounce#readme" : null,
-    },
+    exists,
+    mentionedInDocs: ok,
+    docsUrl: exists ? "https://github.com/sindresorhus/debounce#readme" : null,
   }));
 
 describe("suggestLibrary", () => {

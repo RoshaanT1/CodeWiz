@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "@xyflow/react/dist/style.css";
 
 import { THEME_INIT_SCRIPT } from "@/components/app-shell/theme";
 

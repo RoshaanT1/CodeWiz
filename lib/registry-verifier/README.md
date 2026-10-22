@@ -1,73 +1,95 @@
 # Package Registry Verifier
 
-Stops AI from recommending packages that don't exist. Give it an ecosystem, a package name and the function a suggestion relies on. It checks that:
+Stops AI and LLMs from hallucinating packages and functions that don't exist. Checks npm, PyPI, or the Python standard library, confirms that the recommended function appears in the package's documentation or README, and returns the verified documentation URL.
 
-- **The package is real:** it's in the npm registry or on PyPI, or the module is in the Python standard library (a static list generated from `sys.stdlib_module_names`).
-- **The function is documented:** its name appears, as a whole word, in the package's README or description, or on the module's page on docs.python.org.
+## What it does
 
-It returns a docs link from the registry, not one written by the model. Only show a suggestion when `verified` is true.
-
-No API keys. It never runs or installs anything, it only reads public registry metadata. It never throws.
+- Verifies that packages suggested by AI models actually exist in:
+  - **npm** (via official npm registry API, including scoped packages)
+  - **PyPI** (via PyPI JSON API)
+  - **Python standard library** (via offline static catalog of `sys.stdlib_module_names`)
+- Inspects the package's README, summary, or official documentation to confirm that the suggested function or utility is actually mentioned.
+- Resolves official documentation and homepage URLs directly from package metadata.
+- Completely self-contained with zero external dependencies (uses standard native `fetch`).
+- Never throws exceptions; returns a clean `{ exists, mentionedInDocs, docsUrl }` result.
 
 ## Install
 
-Copy the `registry-verifier` folder into your project. It has no dependencies and uses the global `fetch` (Node 18 or later, or any browser).
+Copy `lib/registry-verifier/` into your TypeScript or JavaScript project. Zero third-party dependencies required!
 
-## Usage
+## Usage Example
 
 ```ts
-import { verifyPackage } from "./registry-verifier";
+import { verifyPackage } from "./lib/registry-verifier";
 
-// A real package whose README documents the function
-const real = await verifyPackage({ ecosystem: "npm", package: "debounce", functionName: "debounce" });
+// 1. Verify a real package and utility
+const lodashCheck = await verifyPackage({
+  ecosystem: "npm",
+  package: "lodash",
+  functionName: "debounce",
+});
 
-// A package the model made up
-const fake = await verifyPackage({ ecosystem: "npm", package: "super-debounce-ai", functionName: "debounce" });
+console.log(lodashCheck);
+// => { exists: true, mentionedInDocs: true, docsUrl: "https://lodash.com/" }
 
-// A Python standard library module
-const stdlib = await verifyPackage({ ecosystem: "python_stdlib", package: "functools", functionName: "lru_cache" });
+// 2. Reject an AI hallucination
+const fakeCheck = await verifyPackage({
+  ecosystem: "npm",
+  package: "react-auto-magic-optimizer-xyz",
+  functionName: "optimize",
+});
 
-for (const result of [real, fake, stdlib]) {
-  if (!result.ok) {
-    console.error(result.reason); // network error or invalid name: try again later
-  } else if (result.data.verified) {
-    console.log(`Use ${result.data.package}.${result.data.functionName}: ${result.data.docsUrl}`);
-  } else {
-    console.log(`Dropped ${result.data.package}: exists=${result.data.exists}, documented=${result.data.functionFound}`);
-  }
-}
+console.log(fakeCheck);
+// => { exists: false, mentionedInDocs: false, docsUrl: null, reason: "Package '...' not found on npm." }
+
+// 3. Verify Python standard library
+const pyCheck = await verifyPackage({
+  ecosystem: "python_stdlib",
+  package: "collections",
+  functionName: "defaultdict",
+});
+
+console.log(pyCheck);
+// => { exists: true, mentionedInDocs: true, docsUrl: "https://docs.python.org/3/library/collections.html" }
 ```
 
-## Options
+## Public API
 
-| Option | Type | Notes |
-|---|---|---|
-| `ecosystem` | `"npm" \| "pypi" \| "python_stdlib"` | Which registry to check |
-| `package` | `string` | npm name (scoped names work), PyPI name, or a module such as `os.path` |
-| `functionName` | `string` | For example `debounce` or `os.path.join`. The last dotted part is searched for |
-| `fetch` | `typeof fetch` | Optional. Pass a fake for tests, or a proxied fetch |
-| `timeoutMs` | `number` | Per request. Defaults to 8000 |
+```ts
+export type Ecosystem = "npm" | "pypi" | "python_stdlib";
 
-**Result:** `{ ok: true, data }` with `exists`, `functionFound`, `foundIn` (`"readme"`, `"description"`, `"docs"` or `null`), `verified` and `docsUrl`. A missing package is `ok: true` with `exists: false`. `ok: false` only means the check couldn't run (network error, timeout or an invalid name).
+export type VerifyPackageOptions = {
+  ecosystem: Ecosystem;
+  package: string;
+  functionName: string;
+  timeoutMs?: number;
+  fetchFn?: typeof fetch;
+};
 
-## Limits
+export type VerifyPackageResult = {
+  exists: boolean;
+  mentionedInDocs: boolean;
+  docsUrl: string | null;
+  description?: string;
+  reason?: string;
+};
 
-- Matching is by name. A package that documents the function only on an external site (lodash's main package, for example) isn't verified. Its focused package (`lodash.debounce`) is.
-- The stdlib list is from Python 3.11. Regenerate it with `python3 -c "import sys; print(sorted(sys.stdlib_module_names))"`.
-- Names are validated before any request, so a model can't steer the URL.
-
-## Tests
-
-`index.test.ts` uses a fake `fetch`, so it needs no network:
-
-```bash
-npx vitest run lib/registry-verifier
+export function verifyPackage(options: VerifyPackageOptions): Promise<VerifyPackageResult>;
 ```
+
+## Options and Limits
+
+- **`timeoutMs`**: Maximum time to wait for registry responses (default 8000ms).
+- **`fetchFn`**: Custom fetch implementation for mocking or proxying requests.
+- **Python standard library**: Instantly verified against an offline static set of 200+ modules from `sys.stdlib_module_names`.
 
 ## Dependencies
 
-None at runtime. Tests use [vitest](https://github.com/vitest-dev/vitest) (MIT). Data comes from the public [npm registry](https://registry.npmjs.org), the [PyPI JSON API](https://pypi.org/pypi) and [docs.python.org](https://docs.python.org/3/library/).
+None. Zero third-party runtime dependencies.
 
 ## Contributors
 
-Roshaan Tahir, M Hammad Khan, Fizzah Abdullah, Hammad Khan
+- Roshaan Tahir
+- M Hammad Khan
+- Fizzah Abdullah
+- Hammad Khan
