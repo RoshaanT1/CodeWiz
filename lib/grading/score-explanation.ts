@@ -1,7 +1,7 @@
 import type { z } from "zod";
 
 import { buildScoreExplanationPrompt, type ScoreExplanationInput } from "@/lib/ai/prompts/score-explanation";
-import { ScoreExplanationSchema, type ScoreExplanationOutput } from "@/lib/ai/schemas/score-explanation";
+import { ScoreExplanationOutputSchema, type ScoreExplanationOutput } from "@/lib/ai/schemas/score-explanation";
 
 export type GradingLlm = <T>(request: {
   systemPrompt: string;
@@ -24,5 +24,5 @@ export async function scoreExplanation(
     return { ok: true, data: { score: 0, feedback: "You found the line, but didn't say what goes wrong there." } };
   }
   const { systemPrompt, prompt } = buildScoreExplanationPrompt(input);
-  return llm({ systemPrompt, prompt, schema: ScoreExplanationSchema });
+  return llm({ systemPrompt, prompt, schema: ScoreExplanationOutputSchema });
 }

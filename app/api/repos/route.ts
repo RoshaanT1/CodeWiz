@@ -1,185 +1,166 @@
-// POST /api/repos: validates the URL, indexes the repo (files, functions,
-// calls, metrics) and stores it. Indexing runs in this request, so the file
-// cap keeps it inside maxDuration. Static analysis only: no code is run.
-import { randomUUID } from "node:crypto";
-
-import { NextResponse } from "next/server";
 import { z } from "zod";
+import { NextResponse } from "next/server";
 
 import { requireApiAal2Session } from "@/lib/auth/session";
-import { indexRepo } from "@/lib/repo-indexer";
-import { parseRepoUrl } from "@/lib/repo-indexer/parse-repo-url";
-import { isEligibleCandidate } from "@/lib/selection/rank";
 import { createClient } from "@/lib/supabase/server";
+import { parseRepoUrl } from "@/lib/repo-indexer/parse-repo-url";
+import { fetchDefaultBranchTree } from "@/lib/repo-indexer/fetch-tree";
+import { apiError } from "@/lib/server/responses";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/server/rate-limit";
+import { audit, newRequestId } from "@/lib/server/audit-log";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
-
-const MAX_FILES = 150;
-const BATCH = 200;
-
-type ErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "BAD_REQUEST" | "INVALID_URL" | "CONFLICT" | "SERVER_CONFIG" | "UPSTREAM";
-
-function error(code: ErrorCode, message: string, status: number) {
-  return NextResponse.json({ ok: false as const, error: { code, message } }, { status });
-}
+export const maxDuration = 30;
 
 const BodySchema = z.object({
-  url: z.string().trim().min(1, "Enter a GitHub repo URL.").max(500),
-  folder: z.string().trim().max(300).optional(),
+  url: z.string().min(1).max(500),
+  folder: z.string().optional(),
 });
 
+/**
+ * POST /api/repos
+ * Validates the URL, reads repo metadata from GitHub, and creates the repo row
+ * with status "importing". The client then calls POST /api/repos/[id]/index.
+ */
 export async function POST(request: Request) {
+  const requestId = request.headers.get("x-request-id") ?? newRequestId();
+
   const session = await requireApiAal2Session();
   if (!session.ok) {
-    return error(session.status === 401 ? "UNAUTHORIZED" : session.status === 403 ? "FORBIDDEN" : "UPSTREAM", session.reason, session.status);
+    audit(session.status === 401 ? "api.unauthorized" : "api.forbidden", {
+      requestId, route: "/api/repos", method: "POST",
+    });
+    return apiError(
+      session.status === 401 ? "UNAUTHORIZED" : "FORBIDDEN",
+      session.reason,
+      session.status,
+    );
   }
   const userId = session.data.id;
 
-  let body: z.infer<typeof BodySchema>;
-  try {
-    const parsed = BodySchema.safeParse(await request.json());
-    if (!parsed.success) return error("BAD_REQUEST", parsed.error.issues[0]?.message ?? "Enter a GitHub repo URL.", 400);
-    body = parsed.data;
-  } catch {
-    return error("BAD_REQUEST", 'Send JSON like { "url": "https://github.com/owner/repo" }.', 400);
+  // SEC-06: In-memory sliding-window rate limit (10 req/min per user).
+  const rateCheck = checkRateLimit(`repos:${userId}`, RATE_LIMITS.repoImport);
+  if (!rateCheck.ok) {
+    audit("api.rate_limited", {
+      requestId, userId, route: "/api/repos", method: "POST",
+      meta: { retryAfterMs: rateCheck.retryAfterMs },
+    });
+    return apiError("RATE_LIMITED", rateCheck.reason, 429);
   }
 
-  const parsedUrl = parseRepoUrl(body.url);
-  if (!parsedUrl.ok) return error("INVALID_URL", parsedUrl.reason, 400);
-  const { owner, repo } = parsedUrl.data;
-  const folder = body.folder || parsedUrl.data.path || null;
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return apiError("BAD_REQUEST", "Send a JSON body with a url field.", 400);
+  }
+
+  const parsed = BodySchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError("BAD_REQUEST", parsed.error.issues[0]?.message ?? "Invalid body.", 400);
+  }
+
+  const urlResult = parseRepoUrl(parsed.data.url);
+  if (!urlResult.ok) {
+    return apiError("INVALID_URL", urlResult.reason, 400);
+  }
 
   const token = process.env.GITHUB_TOKEN;
-  if (!token) return error("SERVER_CONFIG", "GITHUB_TOKEN isn't set on the server.", 500);
+  if (!token) {
+    return apiError("SERVER_CONFIG", "GITHUB_TOKEN is not configured on the server.", 500);
+  }
+
+  const { owner, repo } = urlResult.data;
+
+  // Verify repository visibility: CodeWiz strictly imports public repositories.
+  try {
+    const repoMetaRes = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "codewiz-repo-indexer",
+        },
+        cache: "no-store",
+      },
+    );
+    if (repoMetaRes.status === 404) {
+      return apiError("NOT_FOUND", "Repository not found on GitHub.", 404);
+    }
+    if (repoMetaRes.ok) {
+      const meta = (await repoMetaRes.json()) as { private?: boolean };
+      if (meta.private) {
+        audit("repo.import_private_blocked", {
+          requestId, userId, route: "/api/repos", method: "POST",
+          meta: { owner, repo },
+        });
+        return apiError(
+          "FORBIDDEN",
+          "Only public GitHub repositories can be imported into CodeWiz.",
+          403,
+        );
+      }
+    }
+  } catch {
+    // Network fallback: let fetchDefaultBranchTree handle connection
+  }
+
+  const tree = await fetchDefaultBranchTree({ owner, repo, token });
+  if (!tree.ok) {
+    const map: Record<string, [string, number]> = {
+      NOT_FOUND: ["NOT_FOUND", 404],
+      RATE_LIMITED: ["RATE_LIMITED", 429],
+      GITHUB_AUTH: ["SERVER_CONFIG", 502],
+    };
+    const [code, status] = map[tree.code] ?? ["UPSTREAM", 502];
+    return apiError(code as never, tree.reason, status);
+  }
 
   const client = await createClient();
-  if (!client.ok) return error("SERVER_CONFIG", client.reason, 500);
-  const db = client.data;
+  if (!client.ok) {
+    return apiError("UPSTREAM", client.reason, 503);
+  }
 
-  const sameRepo = db
+  // Reuse existing row if the same user/owner/repo/folder combination
+  // was already registered to avoid duplicate records.
+  const { data: existing } = await client.data
     .from("repos")
     .select("id, status")
     .eq("user_id", userId)
     .eq("owner", owner)
     .eq("name", repo)
-    .eq("status", "indexed");
-  const { data: existing } = await (folder ? sameRepo.eq("folder", folder) : sameRepo.is("folder", null))
-    .limit(1)
-    .maybeSingle<{ id: string; status: string }>();
-  if (existing) return NextResponse.json({ ok: true as const, data: { repoId: existing.id, reused: true } });
+    .eq("folder", parsed.data.folder ?? "")
+    .maybeSingle();
 
-  const { data: repoRow, error: repoError } = await db
+  if (existing) {
+    return NextResponse.json({ ok: true, data: { id: existing.id, status: existing.status } });
+  }
+
+  const { data: row, error } = await client.data
     .from("repos")
-    .insert({ user_id: userId, url: `https://github.com/${owner}/${repo}`, owner, name: repo, folder, status: "importing" })
-    .select("id")
-    .single<{ id: string }>();
-  if (repoError || !repoRow) return error("UPSTREAM", "Couldn't save the repo. Try again.", 502);
-  const repoId = repoRow.id;
-
-  const fail = async (message: string, status = 502) => {
-    await db.from("repos").update({ status: "failed" }).eq("id", repoId).eq("user_id", userId);
-    return error("UPSTREAM", message, status);
-  };
-
-  const indexed = await indexRepo({ url: body.url, token, folder: folder ?? undefined, limits: { maxFiles: MAX_FILES } });
-  if (!indexed.ok) {
-    const notFound = /not found|404/i.test(indexed.reason);
-    return fail(notFound ? "We couldn't find that repo. It may not exist, or it may be private." : indexed.reason, notFound ? 404 : 502);
-  }
-  if (indexed.data.functions.length === 0) {
-    console.warn(`[repos] no functions from ${indexed.data.files.length} files; skipped: ${JSON.stringify(indexed.data.skipped.slice(0, 3))}`);
-    return fail(
-      folder
-        ? `We didn't find any Python, JavaScript or TypeScript functions in ${folder}. Check the folder name.`
-        : "We didn't find any Python, JavaScript or TypeScript functions in that repo.",
-      422,
-    );
-  }
-
-  // The indexer's ids aren't always unique (a property getter and setter share
-  // one), so every function gets its own UUID and calls resolve to the first.
-  const rowIds = indexed.data.functions.map(() => randomUUID());
-  const ids = new Map<string, string>();
-  indexed.data.functions.forEach((fn, i) => {
-    if (!ids.has(fn.id)) ids.set(fn.id, rowIds[i] ?? randomUUID());
-  });
-  const rows = indexed.data.functions.map((fn, i) => {
-    const candidate = {
-      id: fn.id,
-      name: fn.name,
-      qualifiedName: fn.qualifiedName,
-      file: `/${fn.filePath}`,
-      language: fn.language,
-      startLine: fn.startLine,
-      endLine: fn.endLine,
-      length: fn.metrics.length,
-      branches: fn.metrics.branches,
-      callers: fn.metrics.callers,
-      callees: fn.metrics.callees,
-      dataAccess: fn.metrics.dataAccess,
-      category: fn.category,
-    };
-    return {
-      id: rowIds[i],
+    .insert({
       user_id: userId,
-      repo_id: repoId,
-      file_path: fn.filePath,
-      name: fn.name,
-      qualified_name: fn.qualifiedName,
-      // The table stores TSX as TypeScript.
-      language: fn.language === "tsx" ? "typescript" : fn.language,
-      start_line: fn.startLine,
-      end_line: fn.endLine,
-      code: fn.code,
-      length: fn.metrics.length,
-      branches: fn.metrics.branches,
-      callers: fn.metrics.callers,
-      callees: fn.metrics.callees,
-      data_access: fn.metrics.dataAccess,
-      category: fn.category,
-      importance: fn.importance,
-      excluded: !isEligibleCandidate(candidate),
-    };
-  });
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const { error: insertError } = await db.from("functions").insert(rows.slice(i, i + BATCH));
-    if (insertError) {
-      console.warn(`[repos] function insert failed: ${insertError.message}`);
-      return fail("Couldn't save the functions. Try again.");
-    }
-  }
-
-  const seen = new Set<string>();
-  const callRows = indexed.data.calls.flatMap((call) => {
-    const caller = ids.get(call.callerId);
-    const callee = ids.get(call.calleeId);
-    const key = `${caller}:${callee}`;
-    if (!caller || !callee || caller === callee || seen.has(key)) return [];
-    seen.add(key);
-    return [{ user_id: userId, repo_id: repoId, caller_id: caller, callee_id: callee }];
-  });
-  for (let i = 0; i < callRows.length; i += BATCH) {
-    const { error: callError } = await db.from("function_calls").insert(callRows.slice(i, i + BATCH));
-    if (callError) {
-      console.warn(`[repos] call insert failed: ${callError.message}`);
-      return fail("Couldn't save the call map. Try again.");
-    }
-  }
-
-  await db
-    .from("repos")
-    .update({
-      status: "indexed",
-      branch: indexed.data.commitSha,
-      file_count: indexed.data.files.length,
-      function_count: rows.length,
+      url: parsed.data.url,
+      owner,
+      name: repo,
+      branch: tree.data.defaultBranch,
+      commit_sha: tree.data.defaultBranch,
+      folder: parsed.data.folder ?? null,
+      status: "importing",
     })
-    .eq("id", repoId)
-    .eq("user_id", userId);
+    .select("id")
+    .single();
 
-  return NextResponse.json({
-    ok: true as const,
-    data: { repoId, reused: false, functionCount: rows.length, truncated: indexed.data.truncated || indexed.data.files.length >= MAX_FILES },
+  if (error || !row) {
+    return apiError("UPSTREAM", "Failed to create repo record.", 500);
+  }
+
+  audit("repo.import", {
+    requestId, userId, route: "/api/repos", method: "POST",
+    meta: { repoId: row.id, owner, repo },
   });
+
+  return NextResponse.json({ ok: true, data: { id: row.id, status: "importing" } }, { status: 201 });
 }

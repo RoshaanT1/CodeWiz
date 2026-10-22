@@ -3,13 +3,16 @@ import "server-only";
 import Parser from "web-tree-sitter";
 
 import { loggedLlm, type AiCallLog } from "@/lib/ai/logged-llm";
-import { plantBugs, type PlanterLanguage, type PlanterLlm, type PlantBugsOptions, type PlantBugsResult } from "@/lib/bug-planter";
+import { plantBugs, type LlmFunction, type PlantBugsOptions, type PlantBugsResult } from "@/lib/bug-planter";
 import { loadLanguage } from "@/lib/repo-indexer/parser-loader";
 
 /** Model adapter for the bug planter, using the shared provider wrapper. */
-export function planterLlm(onCall?: (log: AiCallLog) => void): PlanterLlm {
-  return loggedLlm({ route: "drill", temperature: 0.7, maxTokens: 2000, onCall });
+export function planterLlm(onCall?: (log: AiCallLog) => void): LlmFunction {
+  const jsonLlm = loggedLlm({ route: "drill", temperature: 0.7, maxTokens: 2000, onCall });
+  return (params) => jsonLlm({ ...params, systemPrompt: params.systemPrompt ?? "" });
 }
+
+type PlanterLanguage = "python" | "javascript" | "typescript" | "tsx";
 
 function dedent(code: string): string {
   const lines = code.split("\n");
@@ -46,16 +49,21 @@ async function hasSyntaxError(code: string, language: PlanterLanguage): Promise<
 /**
  * Builds a parse check for one function: finds a wrapper under which the
  * original parses cleanly, then requires the changed code to as well. If no
- * wrapper works, or the grammar can't load, the check is skipped (true).
+ * wrapper works, or the grammar can't load, the check is skipped (ok: true).
  */
 export function makeParseCheck(original: string) {
-  return async (changed: string, language: PlanterLanguage): Promise<boolean> => {
-    for (const wrap of WRAPPERS[language]) {
-      const originalError = await hasSyntaxError(wrap(original), language);
-      if (originalError === null) return true;
-      if (!originalError) return (await hasSyntaxError(wrap(changed), language)) === false;
+  return async ({ code: changed, language }: { code: string; language: string }): Promise<{ ok: boolean; reason?: string }> => {
+    const lang = language as PlanterLanguage;
+    const wrappers = WRAPPERS[lang] ?? [(c: string) => c];
+    for (const wrap of wrappers) {
+      const originalError = await hasSyntaxError(wrap(original), lang);
+      if (originalError === null) return { ok: true };
+      if (!originalError) {
+        const hasError = await hasSyntaxError(wrap(changed), lang);
+        return hasError === false ? { ok: true } : { ok: false, reason: "Changed code has syntax error" };
+      }
     }
-    return true;
+    return { ok: true };
   };
 }
 

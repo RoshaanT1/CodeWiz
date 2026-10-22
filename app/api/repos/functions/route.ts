@@ -2,9 +2,49 @@
 // It is NOT part of the docs/ARCHITECTURE.md API contract. It will be replaced
 // by POST /api/repos/[id]/index (PARSE-5). It writes nothing to the database.
 // The 20-file cap is specific to this temporary route.
+//
+// GET /api/repos/functions?repo_id=<uuid>
+// Returns the stored call edges for a repo (used by the Call Map).
 import { NextResponse } from "next/server";
 
 import { requireApiAal2Session } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
+import { apiError } from "@/lib/server/responses";
+
+export async function GET(request: Request) {
+  const session = await requireApiAal2Session();
+  if (!session.ok) {
+    return apiError(session.status === 401 ? "UNAUTHORIZED" : "FORBIDDEN", session.reason, session.status);
+  }
+  const userId = session.data.id;
+
+  const url = new URL(request.url);
+  const repoId = url.searchParams.get("repo_id");
+  if (!repoId) return apiError("BAD_REQUEST", "repo_id query param required.", 400);
+
+  const client = await createClient();
+  if (!client.ok) return apiError("UPSTREAM", client.reason, 503);
+
+  // Verify ownership.
+  const { data: repo } = await client.data
+    .from("repos").select("id").eq("id", repoId).eq("user_id", userId).single();
+  if (!repo) return apiError("NOT_FOUND", "Repo not found.", 404);
+
+  const { data: callRows } = await client.data
+    .from("function_calls")
+    .select("caller_id, callee_id")
+    .eq("repo_id", repoId)
+    .eq("user_id", userId)
+    .limit(2000);
+
+  return NextResponse.json({
+    ok: true,
+    data: {
+      calls: (callRows ?? []).map((r) => ({ callerId: r.caller_id, calleeId: r.callee_id })),
+    },
+  });
+}
+
 import { extractFunctions } from "@/lib/repo-indexer/extract-functions";
 import { fetchFiles } from "@/lib/repo-indexer/fetch-files";
 import { fetchDefaultBranchTree } from "@/lib/repo-indexer/fetch-tree";
