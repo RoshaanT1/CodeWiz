@@ -7,7 +7,7 @@ import { z } from "zod";
 import { callCounter, loggedLlm } from "@/lib/ai/logged-llm";
 import { buildQuizPackPrompt } from "@/lib/ai/prompts/quiz-pack";
 import { recordAiCalls } from "@/lib/ai/record-usage";
-import { QuizPackSchema } from "@/lib/ai/schemas/quiz-pack";
+import { QuizPackOutputSchema } from "@/lib/ai/schemas/quiz-pack";
 import { requireApiAal2Session } from "@/lib/auth/session";
 import { checkAiCap } from "@/lib/server/daily-cap";
 import { createClient } from "@/lib/supabase/server";
@@ -71,12 +71,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         code: fn.data.code,
         startLine: fn.data.start_line,
         language: fn.data.language ?? "javascript",
-        name: fn.data.qualified_name ?? fn.data.name,
-        file: fn.data.file_path,
-        callers: [],
+        functionName: fn.data.qualified_name ?? fn.data.name,
+        filePath: fn.data.file_path,
+        callerSnippets: [],
         calleeNames: [],
       }),
-      schema: QuizPackSchema,
+      schema: QuizPackOutputSchema,
     });
     await recordAiCalls(db, userId, calls.count);
     if (!result.ok) return error("UPSTREAM", "We couldn't explain this function right now. Try again.", 502);

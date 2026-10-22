@@ -10,11 +10,14 @@ import {
   type FunctionCategory,
 } from "./rank";
 
+import type { LlmProvider } from "@/lib/ai/call-json";
+
 export type SelectFunctionsOptions = {
   candidates: FunctionCandidate[];
   roundSize?: number;
   weakBugTypes?: string[];
   apiKey?: string;
+  provider?: LlmProvider;
 };
 
 export type SelectFunctionsResult = {
@@ -99,7 +102,7 @@ export function validatePicks(
 export async function selectFunctions(
   options: SelectFunctionsOptions,
 ): Promise<SelectFunctionsResult> {
-  const { candidates, roundSize = 5, weakBugTypes, apiKey } = options;
+  const { candidates, roundSize = 5, weakBugTypes, apiKey, provider } = options;
 
   const rankedCandidates = rankCandidates(candidates, 15);
   const targetCount = Math.min(roundSize, rankedCandidates.length);
@@ -120,6 +123,7 @@ export async function selectFunctions(
     schema: SelectFunctionsOutputSchema,
     temperature: 0.3,
     apiKey,
+    provider,
   });
 
   if (aiResult.ok) {

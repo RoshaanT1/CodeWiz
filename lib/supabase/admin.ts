@@ -2,28 +2,26 @@ import "server-only";
 
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
-import { getSupabaseEnv } from "./env";
-
 /**
- * Supabase client with the secret key. It bypasses Row Level Security, so use
- * it only where the rules require it (the `planted_bugs` answer key, scoring
- * writes) and always filter by the user id from the verified session.
+ * Admin Supabase client — uses the secret key, bypasses Row Level Security.
+ * Use ONLY for server-side operations that need to read planted_bugs or write
+ * scores, always filtering by the verified user id from the session.
  */
 export function createAdminClient() {
-  const env = getSupabaseEnv();
-  if (!env.ok) return env;
-
-  const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
-  if (!secretKey) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
     return {
       ok: false as const,
       reason:
-        "SUPABASE_SECRET_KEY isn't set on the server. Add it in .env.local or the Vercel project settings, then restart.",
+        "NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) is not set. Add it to your environment.",
     };
   }
-
-  const client = createSupabaseClient(env.data.url, secretKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  return { ok: true as const, data: client };
+  return {
+    ok: true as const,
+    data: createSupabaseClient(url, key, {
+      auth: { persistSession: false },
+    }),
+  };
 }

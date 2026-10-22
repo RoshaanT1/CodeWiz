@@ -37,12 +37,12 @@ Gigs 1 and 2 come first. Publish a bonus gig only while the core build is on tra
 
 | Gig | Status | Devmarketplace link | Commit |
 |---|---|---|---|
-| 1. GitHub Repo Indexer | Published (by Fizzah) | Link to add | 788a776 |
-| 2. Verified Bug Planter | Published (by Roshaan) | Link to add | f447be0 |
-| 3. Supabase TOTP 2FA | Published (by Fizzah) | Link to add | 17c4622 |
-| 4. Typed LLM JSON Calls | Published (by Fizzah) | Link to add | 384ca15 |
-| 5. Package Registry Verifier | Ready | | fa72655 |
-| 6. React Call Map | Ready | | aabd8be |
+| 1. GitHub Repo Indexer | Ready | | 788a776 |
+| 2. Verified Bug Planter | Ready | | |
+| 3. Supabase TOTP 2FA | Ready | | 17c4622 |
+| 4. Typed LLM JSON Calls | Ready | | 384ca15 |
+| 5. Package Registry Verifier | Ready | | |
+| 6. React Call Map | Ready | | |
 
 Status goes from Not started, to Ready (the agent prepared it), to Published (link added).
 
@@ -82,7 +82,7 @@ Titles and descriptions are already within the character limits. The code snippe
 - **Title (45/50):** Verified Bug Planter for code review practice
 - **Description (181/200):** Give it a function and get back a copy with 1 to 3 realistic bugs and an answer key. Every bug is checked: the diff matches the key, the code still parses and the behaviour changes.
 - **Skills:** TypeScript, Node.js, plus AI or LLM if the list has it
-- **Custom tags:** LLM, code review, bug seeding, tree-sitter, zod, education
+- **Custom tags:** LLM, code review, bug seeding, jsdiff, tree-sitter, zod, education
 - **Code snippet (TypeScript):** a `plantBugs` call with an `llm` adapter, and how to read the result
 - **Public API:** `plantBugs(options)` returns `{ ok: true, changedCode, bugs }` or `{ ok: false, reason }`. Options: `code`, `language`, `startLine`, `count`, allowed `bugTypes`, an `llm` function (prompt and schema in, JSON out), and an optional `parse` function. Each bug has `lineStart`, `lineEnd`, `bugType`, `explanation` and `fix`
 - **Done when:** it works with both OpenAI and Anthropic by swapping only the `llm` function

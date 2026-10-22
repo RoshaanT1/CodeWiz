@@ -111,17 +111,54 @@ export function RepoPreview() {
 }
 
 function Result({ data }: { data: RepoPreviewData }) {
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  async function handleImport() {
+    setImporting(true);
+    setImportError(null);
+    try {
+      const res = await fetch("/api/repos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: `https://github.com/${data.owner}/${data.repo}` }),
+      });
+      const json = await res.json();
+      if (json.ok && json.data?.id) {
+        window.location.href = `/repos/${json.data.id}`;
+      } else {
+        setImportError(json.error?.message ?? "Failed to create repo record.");
+      }
+    } catch {
+      setImportError("Network error while creating repo.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <div className="text-sm">
-        <span className="font-semibold">
-          {data.owner}/{data.repo}
-        </span>{" "}
-        <span className="text-muted-foreground">
-          · {data.fileCount} {data.fileCount === 1 ? "file" : "files"} on{" "}
-          <span className="font-mono">{data.defaultBranch}</span>
-        </span>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm">
+          <span className="font-semibold">
+            {data.owner}/{data.repo}
+          </span>{" "}
+          <span className="text-muted-foreground">
+            · {data.fileCount} {data.fileCount === 1 ? "file" : "files"} on{" "}
+            <span className="font-mono">{data.defaultBranch}</span>
+          </span>
+        </div>
+
+        <Button onClick={handleImport} disabled={importing} size="sm">
+          {importing ? "Creating Record…" : "Import & Map Repo →"}
+        </Button>
       </div>
+
+      {importError && (
+        <p role="alert" className="text-xs text-destructive">
+          {importError}
+        </p>
+      )}
 
       {data.requestedBranch && data.requestedBranch !== data.defaultBranch && (
         <p className="text-sm text-muted-foreground">

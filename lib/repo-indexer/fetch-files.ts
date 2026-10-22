@@ -69,11 +69,48 @@ async function fetchOne(
       if (!res.ok) {
         return { kind: "skip", skip: { path, reason: `GitHub answered ${res.status}` } };
       }
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      if (bytes.byteLength > maxBytes) {
+      // Check Content-Length header early if available.
+      const cl = res.headers.get("content-length");
+      if (cl && Number(cl) > maxBytes) {
         return { kind: "skip", skip: { path, reason: "File is too large" } };
       }
-      return { kind: "file", file: { path, source: new TextDecoder().decode(bytes) } };
+
+      if (!res.body) {
+        return { kind: "skip", skip: { path, reason: "Empty response body" } };
+      }
+
+      // Read stream with early abort if bytes exceed maxBytes.
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let totalBytes = 0;
+      let tooLarge = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          totalBytes += value.byteLength;
+          if (totalBytes > maxBytes) {
+            tooLarge = true;
+            await reader.cancel();
+            break;
+          }
+          chunks.push(value);
+        }
+      }
+
+      if (tooLarge) {
+        return { kind: "skip", skip: { path, reason: "File is too large" } };
+      }
+
+      const merged = new Uint8Array(totalBytes);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+
+      return { kind: "file", file: { path, source: new TextDecoder().decode(merged) } };
     } catch {
       if (attempt === 1 || options.signal?.aborted) {
         return { kind: "skip", skip: { path, reason: "Couldn't reach GitHub" } };
