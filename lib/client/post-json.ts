@@ -14,3 +14,19 @@ export async function postJson<T>(url: string, body?: unknown): Promise<{ ok: tr
     return { ok: false, message: "Couldn't reach the server. Check your connection and try again." };
   }
 }
+
+const inFlight = new Map<string, Promise<{ ok: true; data: unknown } | { ok: false; message: string }>>();
+
+/**
+ * POSTs with no body, sharing one request per URL while it's in flight. Lets
+ * the round flow prepare the next step in the background without the screen
+ * starting a second, duplicate generation for the same function.
+ */
+export function postOnce<T>(url: string): Promise<{ ok: true; data: T } | { ok: false; message: string }> {
+  let pending = inFlight.get(url);
+  if (!pending) {
+    pending = postJson<unknown>(url).finally(() => inFlight.delete(url));
+    inFlight.set(url, pending);
+  }
+  return pending as Promise<{ ok: true; data: T } | { ok: false; message: string }>;
+}

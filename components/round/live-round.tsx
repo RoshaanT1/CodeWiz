@@ -2,13 +2,13 @@
 
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { PageTitle } from "@/components/app-shell/page-parts";
 import { DrillPanel } from "@/components/drill/drill-panel";
 import { QuizPanel } from "@/components/quiz/quiz-panel";
 import { Button } from "@/components/ui/button";
-import { postJson } from "@/lib/client/post-json";
+import { postJson, postOnce } from "@/lib/client/post-json";
 import type { LiveRoundData } from "@/lib/quiz/load-round";
 
 /** ROUND-4: quiz, explanation, then drill for each function; resumes where the user left off. */
@@ -24,6 +24,16 @@ export function LiveRound({ round }: { round: LiveRoundData }) {
   const state = progress[index];
   const allDone = progress.every((p) => p.quizDone && p.drillDone);
   const doneCount = progress.filter((p) => p.quizDone && p.drillDone).length;
+
+  // ROUND-5: while the user works on one step, prepare the next one, so the
+  // ~30 s generations mostly happen in the background. Errors are ignored
+  // here; the panel shows them with a retry when it loads.
+  const nextQuizId = round.functions[index + 1]?.roundFunctionId;
+  useEffect(() => {
+    if (!fn || !state) return;
+    if (!state.drillDone) void postOnce(`/api/round-functions/${fn.roundFunctionId}/drill`);
+    if (state.quizDone && nextQuizId) void postOnce(`/api/round-functions/${nextQuizId}/quiz`);
+  }, [fn, state, nextQuizId]);
 
   function mark(key: "quizDone" | "drillDone") {
     setProgress((old) => old.map((p, i) => (i === index ? { ...p, [key]: true } : p)));

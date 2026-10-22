@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { postJson } from "@/lib/client/post-json";
+import { postJson, postOnce } from "@/lib/client/post-json";
 import type { QuizView } from "@/lib/quiz/quiz-view";
 
 const KIND_LABEL = { purpose: "Purpose", behaviour: "Behaviour", edge_case: "Edge case", impact: "Impact" } as const;
@@ -28,7 +28,7 @@ export function QuizPanel({ roundFunctionId, onDone }: Props) {
   const load = useCallback(async () => {
     setLoadError(null);
     setQuiz(null);
-    const res = await postJson<QuizView>(`/api/round-functions/${roundFunctionId}/quiz`);
+    const res = await postOnce<QuizView>(`/api/round-functions/${roundFunctionId}/quiz`);
     if (res.ok) setQuiz(res.data);
     else setLoadError(res.message);
   }, [roundFunctionId]);
