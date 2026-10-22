@@ -21,5 +21,5 @@ export default async function RepositoryPage({ params }: Props) {
   const result = await loadRepo(user.id, repoId);
   if (!result.ok) throw new Error(result.reason);
   if (!result.data) notFound();
-  return <LiveRepo repo={result.data} />;
+  return <LiveRepo repo={result.data} showMetrics={process.env.FEATURE_METRICS === "true"} />;
 }

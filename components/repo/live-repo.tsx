@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { EmptyState, PageTitle, SectionTitle } from "@/components/app-shell/page-parts";
 import { CallMap, type Category } from "@/components/call-map";
+import { MetricsPanel } from "@/components/metrics/metrics-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ const CATEGORIES = ["all", "entry", "core", "data", "helper"] as const;
 const SIZES = [3, 5, 10] as const;
 
 /** MAP-1: browse a repo's functions and start a round. */
-export function LiveRepo({ repo }: { repo: RepoDetail }) {
+export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; showMetrics?: boolean }) {
   const router = useRouter();
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("all");
   const [query, setQuery] = useState("");
@@ -161,6 +162,7 @@ export function LiveRepo({ repo }: { repo: RepoDetail }) {
                     {explainError}
                   </p>
                 )}
+                {showMetrics && <MetricsPanel metrics={selected.metrics} />}
               </div>
             )}
           </section>
