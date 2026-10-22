@@ -42,7 +42,7 @@ Gigs 1 and 2 come first. Publish a bonus gig only while the core build is on tra
 | 3. Supabase TOTP 2FA | Published (by Fizzah) | Link to add | 17c4622 |
 | 4. Typed LLM JSON Calls | Published (by Fizzah) | Link to add | 384ca15 |
 | 5. Package Registry Verifier | Ready | | fa72655 |
-| 6. React Call Map | Not started | | |
+| 6. React Call Map | Ready | | aabd8be |
 
 Status goes from Not started, to Ready (the agent prepared it), to Published (link added).
 
