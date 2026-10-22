@@ -91,8 +91,14 @@ export async function POST(request: Request) {
     return fail("We didn't find any Python, JavaScript or TypeScript functions in that repo.", 422);
   }
 
-  const ids = new Map(indexed.data.functions.map((fn) => [fn.id, randomUUID()]));
-  const rows = indexed.data.functions.map((fn) => {
+  // The indexer's ids aren't always unique (a property getter and setter share
+  // one), so every function gets its own UUID and calls resolve to the first.
+  const rowIds = indexed.data.functions.map(() => randomUUID());
+  const ids = new Map<string, string>();
+  indexed.data.functions.forEach((fn, i) => {
+    if (!ids.has(fn.id)) ids.set(fn.id, rowIds[i] ?? randomUUID());
+  });
+  const rows = indexed.data.functions.map((fn, i) => {
     const candidate = {
       id: fn.id,
       name: fn.name,
@@ -109,7 +115,7 @@ export async function POST(request: Request) {
       category: fn.category,
     };
     return {
-      id: ids.get(fn.id),
+      id: rowIds[i],
       user_id: userId,
       repo_id: repoId,
       file_path: fn.filePath,
@@ -132,7 +138,10 @@ export async function POST(request: Request) {
   });
   for (let i = 0; i < rows.length; i += BATCH) {
     const { error: insertError } = await db.from("functions").insert(rows.slice(i, i + BATCH));
-    if (insertError) return fail("Couldn't save the functions. Try again.");
+    if (insertError) {
+      console.warn(`[repos] function insert failed: ${insertError.message}`);
+      return fail("Couldn't save the functions. Try again.");
+    }
   }
 
   const seen = new Set<string>();
@@ -146,7 +155,10 @@ export async function POST(request: Request) {
   });
   for (let i = 0; i < callRows.length; i += BATCH) {
     const { error: callError } = await db.from("function_calls").insert(callRows.slice(i, i + BATCH));
-    if (callError) return fail("Couldn't save the call map. Try again.");
+    if (callError) {
+      console.warn(`[repos] call insert failed: ${callError.message}`);
+      return fail("Couldn't save the call map. Try again.");
+    }
   }
 
   await db
