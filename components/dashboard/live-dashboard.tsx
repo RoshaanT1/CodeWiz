@@ -16,6 +16,7 @@ import type { WorkspaceRepo, WorkspaceRound } from "@/lib/quiz/load-workspace";
 export function LiveDashboard({ name, repos, rounds }: { name: string; repos: WorkspaceRepo[]; rounds: WorkspaceRound[] }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
+  const [folder, setFolder] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
 
@@ -27,7 +28,7 @@ export function LiveDashboard({ name, repos, rounds }: { name: string; repos: Wo
     }
     setError(null);
     setImporting(true);
-    const res = await postJson<{ repoId: string }>("/api/repos", { url: url.trim() });
+    const res = await postJson<{ repoId: string }>("/api/repos", folder.trim() ? { url: url.trim(), folder: folder.trim().replace(/^\/+|\/+$/g, "") } : { url: url.trim() });
     if (!res.ok) {
       setImporting(false);
       setError(res.message);
@@ -66,6 +67,21 @@ export function LiveDashboard({ name, repos, rounds }: { name: string; repos: Wo
             )}
           </Button>
         </form>
+        <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <label htmlFor="import-folder" className="shrink-0 text-xs text-muted-foreground">
+            Big repo? Import one folder:
+          </label>
+          <Input
+            id="import-folder"
+            value={folder}
+            onChange={(e) => setFolder(e.target.value)}
+            placeholder="src/core (optional)"
+            disabled={importing}
+            className="h-8 text-xs sm:max-w-xs"
+            data-testid="input-repository-folder"
+          />
+        </div>
+        <p className="mt-1 text-[11px] text-muted-foreground">We read up to 150 source files. For larger repos, pick the folder you want to learn.</p>
         {error && (
           <p className="mt-2 text-xs text-destructive" role="alert" data-testid="status-import-error">
             {error}

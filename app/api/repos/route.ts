@@ -88,7 +88,12 @@ export async function POST(request: Request) {
     return fail(notFound ? "We couldn't find that repo. It may not exist, or it may be private." : indexed.reason, notFound ? 404 : 502);
   }
   if (indexed.data.functions.length === 0) {
-    return fail("We didn't find any Python, JavaScript or TypeScript functions in that repo.", 422);
+    return fail(
+      folder
+        ? `We didn't find any Python, JavaScript or TypeScript functions in ${folder}. Check the folder name.`
+        : "We didn't find any Python, JavaScript or TypeScript functions in that repo.",
+      422,
+    );
   }
 
   // The indexer's ids aren't always unique (a property getter and setter share
