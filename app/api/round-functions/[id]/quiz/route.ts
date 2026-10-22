@@ -9,13 +9,14 @@ import { buildQuizPackPrompt } from "@/lib/ai/prompts/quiz-pack";
 import { recordAiCalls } from "@/lib/ai/record-usage";
 import { QuizPackSchema, type QuizPack } from "@/lib/ai/schemas/quiz-pack";
 import { requireApiAal2Session } from "@/lib/auth/session";
+import { checkAiCap } from "@/lib/server/daily-cap";
 import { toQuizView, type QuizItemRow } from "@/lib/quiz/quiz-view";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-type ErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND" | "SERVER_CONFIG" | "UPSTREAM";
+type ErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND" | "SERVER_CONFIG" | "UPSTREAM" | "RATE_LIMITED";
 
 function error(code: ErrorCode, message: string, status: number) {
   return NextResponse.json({ ok: false as const, error: { code, message } }, { status });
@@ -92,6 +93,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       : [],
   );
   const calleeNames = (CalleeRows.safeParse(calleeLinks.data ?? []).data ?? []).flatMap((row) => (row.functions ? [row.functions.name] : []));
+
+  const cap = await checkAiCap(db, userId);
+  if (!cap.ok) return error("RATE_LIMITED", cap.reason, 429);
 
   const calls = callCounter();
   const llm = loggedLlm({ route: "quiz", temperature: 0.5, maxTokens: 1800, onCall: calls.onCall });

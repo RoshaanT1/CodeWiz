@@ -11,6 +11,8 @@ export default async function DashboardPage() {
   const result = await loadWorkspace(user.id);
   if (!result.ok) throw new Error(result.reason);
   const name =
-    typeof user.user_metadata.display_name === "string" ? user.user_metadata.display_name : (user.email?.split("@")[0] ?? "there");
+    typeof user.user_metadata.full_name === "string" && user.user_metadata.full_name.trim()
+      ? user.user_metadata.full_name.trim()
+      : (user.email?.split("@")[0] ?? "there");
   return <LiveDashboard name={name} repos={result.data.repos} rounds={result.data.rounds} />;
 }

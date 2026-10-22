@@ -8,6 +8,7 @@ import { callCounter } from "@/lib/ai/logged-llm";
 import { plantVerifiedBugs } from "@/lib/ai/plant-bugs";
 import { recordAiCalls } from "@/lib/ai/record-usage";
 import { requireApiAal2Session } from "@/lib/auth/session";
+import { checkAiCap } from "@/lib/server/daily-cap";
 import { bugTypesForLanguage } from "@/lib/bug-planter";
 import { weakBugTypes } from "@/lib/scoring/weak-bug-types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -16,7 +17,7 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-type ErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND" | "SERVER_CONFIG" | "UPSTREAM";
+type ErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND" | "SERVER_CONFIG" | "UPSTREAM" | "RATE_LIMITED";
 
 function error(code: ErrorCode, message: string, status: number) {
   return NextResponse.json({ ok: false as const, error: { code, message } }, { status });
@@ -109,6 +110,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   const { data: skills } = await db.from("skill_scores").select("bug_type, attempts, caught").eq("user_id", userId);
   const weak = weakBugTypes(skills ?? [], bugTypesForLanguage(fn.language));
+
+  const cap = await checkAiCap(db, userId);
+  if (!cap.ok) return error("RATE_LIMITED", cap.reason, 429);
 
   const calls = callCounter();
   const planted = await plantVerifiedBugs(

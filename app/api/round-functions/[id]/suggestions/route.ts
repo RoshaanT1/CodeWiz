@@ -9,13 +9,14 @@ import { callCounter, loggedLlm } from "@/lib/ai/logged-llm";
 import { recordAiCalls } from "@/lib/ai/record-usage";
 import { suggestLibrary } from "@/lib/ai/suggest-library";
 import { requireApiAal2Session } from "@/lib/auth/session";
+import { checkAiCap } from "@/lib/server/daily-cap";
 import { verifyPackage } from "@/lib/registry-verifier";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-type ErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND" | "SERVER_CONFIG" | "UPSTREAM";
+type ErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND" | "SERVER_CONFIG" | "UPSTREAM" | "RATE_LIMITED";
 
 function error(code: ErrorCode, message: string, status: number) {
   return NextResponse.json({ ok: false as const, error: { code, message } }, { status });
@@ -124,6 +125,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (!libraryCheckEnabled() || existingRows.some((row) => row.kind === "library")) {
     return NextResponse.json({ ok: true as const, data: { suggestions: toViews(existingRows) } });
   }
+
+  const cap = await checkAiCap(db, userId);
+  if (!cap.ok) return error("RATE_LIMITED", cap.reason, 429);
 
   const calls = callCounter();
   const result = await suggestLibrary(

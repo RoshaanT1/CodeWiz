@@ -1,7 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-import { EmptyState, PageTitle, SectionTitle } from "@/components/app-shell/page-parts";
+import { EmptyState, PageTitle } from "@/components/app-shell/page-parts";
 import { DrillResults } from "@/components/drill/drill-results";
 import { Button } from "@/components/ui/button";
 import type { RoundResultsData } from "@/lib/scoring/load-round-results";
@@ -46,16 +46,15 @@ export function RoundReport({ round }: { round: RoundResultsData }) {
         <div className="space-y-8">
           {round.functions.map((fn) => (
             <section key={fn.roundFunctionId} data-testid={`result-function-${fn.functionId}`}>
-              <SectionTitle
-                aside={
-                  <span className="font-mono text-sm font-semibold text-primary">
-                    {fn.score === null ? "Not scored" : `${fn.score} / 100`}
-                  </span>
-                }
-              >
-                <span>{fn.name}</span>
-                <span className="ml-2 font-mono text-[11px] font-normal text-muted-foreground">{fn.file}</span>
-              </SectionTitle>
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <h2 className="min-w-0 break-words text-base font-semibold">
+                  {fn.name}
+                  <span className="ml-2 break-all font-mono text-[11px] font-normal text-muted-foreground">{fn.file}</span>
+                </h2>
+                <span className="shrink-0 font-mono text-sm font-semibold text-primary">
+                  {fn.score === null ? "Not scored" : `${fn.score} / 100`}
+                </span>
+              </div>
 
               {fn.quiz.length > 0 && (
                 <div className="mb-4 space-y-2">
