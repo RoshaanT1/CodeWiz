@@ -130,9 +130,17 @@ export async function POST(request: Request) {
 
   const language = candidates[0]?.language === "python" ? "python" : "javascript";
   const weak = weakBugTypes(skillResult.data ?? [], bugTypesForLanguage(language));
-  const selection = await selectFunctions({ candidates, roundSize: body.size, weakBugTypes: weak });
+  // The model copies short ids (f1, f2…) far more reliably than UUIDs.
+  const realIds = new Map(candidates.map((c, i) => [`f${i + 1}`, c.id]));
+  const aliased = candidates.map((c, i) => ({ ...c, id: `f${i + 1}` }));
+  const selection = await selectFunctions({ candidates: aliased, roundSize: body.size, weakBugTypes: weak });
   await recordAiCalls(db, userId, 1);
-  if (selection.picks.length === 0) return error("BAD_REQUEST", "No functions in this repo are ready for a round.", 400);
+  const picks = selection.picks.flatMap((pick) => {
+    const id = realIds.get(pick.function_id);
+    return id ? [{ ...pick, function_id: id }] : [];
+  });
+  if (!selection.usedAi) console.info("[rounds] AI selection failed checks; used the ranked fallback");
+  if (picks.length === 0) return error("BAD_REQUEST", "No functions in this repo are ready for a round.", 400);
 
   const { data: round, error: roundError } = await db
     .from("rounds")
@@ -142,7 +150,7 @@ export async function POST(request: Request) {
   if (roundError || !round) return error("UPSTREAM", "Couldn't create the round. Try again.", 502);
 
   const { error: rfError } = await db.from("round_functions").insert(
-    selection.picks.map((pick, position) => ({
+    picks.map((pick, position) => ({
       user_id: userId,
       round_id: round.id,
       function_id: pick.function_id,
@@ -160,5 +168,5 @@ export async function POST(request: Request) {
     .from("usage")
     .upsert({ user_id: userId, day, rounds: (usage?.rounds ?? 0) + 1 }, { onConflict: "user_id,day" });
 
-  return NextResponse.json({ ok: true as const, data: { roundId: round.id, count: selection.picks.length, usedAi: selection.usedAi } });
+  return NextResponse.json({ ok: true as const, data: { roundId: round.id, count: picks.length, usedAi: selection.usedAi } });
 }
