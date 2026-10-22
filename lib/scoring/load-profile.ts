@@ -33,10 +33,9 @@ const FunctionRows = z.array(z.object({ id: z.string(), category: z.string().nul
 
 /**
  * SCORE-4: everything the profile page shows, read with the user's own
- * session so Row Level Security applies. Returns ok: true with null data
- * when the user has no rounds yet.
+ * session so Row Level Security applies.
  */
-export async function loadProfile(userId: string): Promise<{ ok: true; data: ProfileData | null } | { ok: false; reason: string }> {
+export async function loadProfile(userId: string): Promise<{ ok: true; data: ProfileData } | { ok: false; reason: string }> {
   const client = await createClient();
   if (!client.ok) return client;
   const db = client.data;
@@ -62,8 +61,6 @@ export async function loadProfile(userId: string): Promise<{ ok: true; data: Pro
 
   const roundRows = RoundRows.parse(rounds.data ?? []);
   const skillRows = SkillRows.parse(skills.data ?? []);
-  if (roundRows.length === 0 && skillRows.length === 0) return { ok: true, data: null };
-
   const scoreRows = ScoreRows.parse(scores.data ?? []);
   const reviewed = new Set(scoreRows.map((s) => s.function_id));
 
