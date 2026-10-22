@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { EmptyState, PageTitle, SectionTitle } from "@/components/app-shell/page-parts";
 import { CallMap, type Category } from "@/components/call-map";
+import { MetricsPanel } from "@/components/metrics/metrics-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ const CATEGORIES = ["all", "entry", "core", "data", "helper"] as const;
 const SIZES = [3, 5, 10] as const;
 
 /** MAP-1: browse a repo's functions and start a round. */
-export function LiveRepo({ repo }: { repo: RepoDetail }) {
+export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; showMetrics?: boolean }) {
   const router = useRouter();
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("all");
   const [query, setQuery] = useState("");
@@ -24,6 +25,25 @@ export function LiveRepo({ repo }: { repo: RepoDetail }) {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState(repo.functions[0]?.id ?? "");
+  const [functions, setFunctions] = useState(repo.functions);
+  const [explanations, setExplanations] = useState<Record<string, string>>({});
+  const [explaining, setExplaining] = useState(false);
+  const [explainError, setExplainError] = useState<string | null>(null);
+  const selected = functions.find((f) => f.id === selectedId);
+
+  async function explain() {
+    if (!selected) return;
+    setExplaining(true);
+    setExplainError(null);
+    const res = await postJson<{ functionId: string; explanation: string }>(`/api/functions/${selected.id}/explain`);
+    setExplaining(false);
+    if (!res.ok) {
+      setExplainError(res.message);
+      return;
+    }
+    setExplanations((old) => ({ ...old, [res.data.functionId]: res.data.explanation }));
+    setFunctions((old) => old.map((f) => (f.id === res.data.functionId ? { ...f, eligible: false } : f)));
+  }
   const mapFunctions = useMemo(
     () => repo.functions.map((f) => ({ id: f.id, name: f.name, file: f.file, category: f.category as Category })),
     [repo.functions],
@@ -31,12 +51,12 @@ export function LiveRepo({ repo }: { repo: RepoDetail }) {
 
   const shown = useMemo(
     () =>
-      repo.functions.filter(
+      functions.filter(
         (f) => (category === "all" || f.category === category) && (!query || f.name.toLowerCase().includes(query.toLowerCase())),
       ),
-    [repo.functions, category, query],
+    [functions, category, query],
   );
-  const eligible = repo.functions.filter((f) => f.eligible && !f.reviewed).length;
+  const eligible = functions.filter((f) => f.eligible && !f.reviewed).length;
 
   async function start() {
     setStarting(true);
@@ -55,7 +75,7 @@ export function LiveRepo({ repo }: { repo: RepoDetail }) {
       <PageTitle
         eyebrow="Repository"
         title={`${repo.owner}/${repo.name}`}
-        description={`${repo.functions.length} functions · ${eligible} ready for practice`}
+        description={`${functions.length} functions · ${eligible} ready for practice`}
       />
 
       {repo.status !== "indexed" ? (
@@ -96,7 +116,7 @@ export function LiveRepo({ repo }: { repo: RepoDetail }) {
           <section className="mb-7">
             <SectionTitle aside={<span className="text-xs text-muted-foreground">Click a function to move the map</span>}>Call map</SectionTitle>
             <div className="h-[360px] overflow-hidden rounded-md border bg-card">
-              <CallMap functions={mapFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} maxNodes={12} />
+              <CallMap functions={mapFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} maxNodes={6} />
             </div>
             <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
               {[
@@ -111,6 +131,40 @@ export function LiveRepo({ repo }: { repo: RepoDetail }) {
                 </span>
               ))}
             </div>
+            {selected && (
+              <div className="mt-3 rounded-md border bg-card p-4" data-testid="explain-panel">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-sm font-medium">{selected.name}</span>
+                  {!explanations[selected.id] && (
+                    <Button size="sm" variant="outline" onClick={() => void explain()} disabled={explaining} data-testid="button-explain">
+                      {explaining ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" /> Explaining…
+                        </>
+                      ) : (
+                        "Explain this function"
+                      )}
+                    </Button>
+                  )}
+                </div>
+                {explanations[selected.id] ? (
+                  <div className="mt-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Explanation · AI-generated</div>
+                    <p className="mt-1 text-sm leading-6">{explanations[selected.id]}</p>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Seeing the explanation leaves this function out of future quizzes, since you&apos;ll already know the answers.
+                  </p>
+                )}
+                {explainError && (
+                  <p className="mt-2 text-xs text-destructive" role="alert">
+                    {explainError}
+                  </p>
+                )}
+                {showMetrics && <MetricsPanel metrics={selected.metrics} />}
+              </div>
+            )}
           </section>
 
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

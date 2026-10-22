@@ -37,10 +37,11 @@ function topNavClass(active: boolean) {
   return `rounded-md px-2 py-1.5 text-[11px] sm:px-2.5 sm:text-xs ${active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`;
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+/** `repos` are the signed-in user's imported repos, listed in the sidebar. */
+export function AppShell({ children, repos }: { children: ReactNode; repos: { id: string; name: string }[] }) {
   const currentPath = usePathname();
   const { dark, toggleTheme } = useTheme();
-  const { user, repositories } = useWorkspace();
+  const { user } = useWorkspace();
   const [mobileNav, setMobileNav] = useState(false);
 
   return (
@@ -156,7 +157,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
           <div className="space-y-0.5">
-            {repositories.map((r) => (
+            {repos.length === 0 && <p className="px-3 py-2 text-[12px] text-muted-foreground">No repositories yet.</p>}
+            {repos.map((r) => (
               <Link
                 href={`/repo/${r.id}`}
                 key={r.id}
