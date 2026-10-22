@@ -1,5 +1,3 @@
-import type { z } from "zod";
-
 import {
   bugTypesForLanguage,
   weightBugTypes,
@@ -7,21 +5,14 @@ import {
   type PlanterLanguage,
 } from "./catalogue";
 import { checkPlantedBugs, type PlantedBug } from "./check";
+import { confirmBehaviour } from "./confirm-behaviour";
 import { buildPlantBugsPrompt } from "./prompt";
 import { PlantBugsOutputSchema } from "./schema";
+import type { PlanterLlm, PlanterParse } from "./types";
 
 export { BUG_CATALOGUE, BUG_TYPES, bugTypesForLanguage, type BugType, type PlanterLanguage } from "./catalogue";
 export type { PlantedBug } from "./check";
-
-/** Caller-supplied model adapter: prompt and schema in, validated JSON out. */
-export type PlanterLlm = <T>(request: {
-  systemPrompt: string;
-  prompt: string;
-  schema: z.ZodType<T>;
-}) => Promise<{ ok: true; data: T } | { ok: false; reason: string }>;
-
-/** Optional parser check: returns false when the code has syntax errors. */
-export type PlanterParse = (code: string, language: PlanterLanguage) => boolean | Promise<boolean>;
+export type { PlanterLlm, PlanterParse } from "./types";
 
 export type PlantBugsOptions = {
   code: string;
@@ -44,7 +35,11 @@ export type PlantBugsResult =
 
 const MAX_ATTEMPTS = 2;
 
-/** AI step D: plants 1 to 3 in-place bugs and checks the result. Retries once. */
+/**
+ * AI steps D and E: plants 1 to 3 in-place bugs, checks the result in code,
+ * then confirms each bug changes behaviour and drops the ones that don't.
+ * Any failure, or no bugs left, regenerates once before returning ok: false.
+ */
 export async function plantBugs(options: PlantBugsOptions): Promise<PlantBugsResult> {
   const { code, language, startLine = 1, count, weakBugTypes, llm, parse } = options;
 
@@ -88,7 +83,23 @@ export async function plantBugs(options: PlantBugsOptions): Promise<PlantBugsRes
       previousIssues = ["changed_code does not parse. Keep the code syntactically valid."];
       continue;
     }
-    return checked;
+
+    const confirmed = await confirmBehaviour({
+      original: code,
+      changedCode: checked.changedCode,
+      startLine,
+      language,
+      bugs: checked.bugs,
+      llm,
+    });
+    if (!confirmed.ok) {
+      return { ok: false, reason: confirmed.reason };
+    }
+    if (confirmed.bugs.length === 0) {
+      previousIssues = ["None of the bugs changed behaviour. Each bug must change the result for some input."];
+      continue;
+    }
+    return { ok: true, changedCode: confirmed.changedCode, bugs: confirmed.bugs };
   }
 
   return { ok: false, reason: `Planted bugs failed checks: ${previousIssues.join(" ")}` };

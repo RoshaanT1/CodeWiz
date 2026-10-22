@@ -72,7 +72,7 @@ export function buildPlantBugsPrompt(options: BuildPlantBugsPromptOptions): {
     "2. changed_code is the whole function WITHOUT line number prefixes, otherwise identical to the original except the bug lines. Keep indentation.",
     `3. Line numbers use the numbering shown (${startLine} to ${endLine}). line_start and line_end cover exactly the lines you changed for that bug.`,
     "4. Bugs must not overlap, must still parse, and must change behaviour for some input. Keep them subtle and realistic, no comments that reveal them.",
-    "5. bug_type must be one of the allowed types listed below.",
+    "5. bug_type must be one of the allowed types listed below, and must describe the change exactly (wrong_return only for a changed return statement).",
     "",
     ...typesSection,
     ...retrySection,
