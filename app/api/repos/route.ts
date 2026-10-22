@@ -88,6 +88,7 @@ export async function POST(request: Request) {
     return fail(notFound ? "We couldn't find that repo. It may not exist, or it may be private." : indexed.reason, notFound ? 404 : 502);
   }
   if (indexed.data.functions.length === 0) {
+    console.warn(`[repos] no functions from ${indexed.data.files.length} files; skipped: ${JSON.stringify(indexed.data.skipped.slice(0, 3))}`);
     return fail(
       folder
         ? `We didn't find any Python, JavaScript or TypeScript functions in ${folder}. Check the folder name.`

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { PageTitle } from "@/components/app-shell/page-parts";
 import { DrillPanel } from "@/components/drill/drill-panel";
 import { QuizPanel } from "@/components/quiz/quiz-panel";
+import { SuggestionCards } from "@/components/suggestions/suggestion-cards";
 import { Button } from "@/components/ui/button";
 import { postJson, postOnce } from "@/lib/client/post-json";
 import type { LiveRoundData } from "@/lib/quiz/load-round";
@@ -14,16 +15,17 @@ import type { LiveRoundData } from "@/lib/quiz/load-round";
 /** ROUND-4: quiz, explanation, then drill for each function; resumes where the user left off. */
 export function LiveRound({ round }: { round: LiveRoundData }) {
   const router = useRouter();
-  const [progress, setProgress] = useState(() => round.functions.map((f) => ({ quizDone: f.quizDone, drillDone: f.drillDone })));
-  const firstOpen = progress.findIndex((p) => !p.quizDone || !p.drillDone);
+  const [progress, setProgress] = useState(() => round.functions.map((f) => ({ quizDone: f.quizDone, drillDone: f.drillDone, suggestionsDone: f.suggestionsDone })));
+  const isDone = (p: { quizDone: boolean; drillDone: boolean; suggestionsDone: boolean }) => p.quizDone && p.drillDone && p.suggestionsDone;
+  const firstOpen = progress.findIndex((p) => !isDone(p));
   const [index, setIndex] = useState(firstOpen === -1 ? Math.max(0, round.functions.length - 1) : firstOpen);
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState<string | null>(null);
 
   const fn = round.functions[index];
   const state = progress[index];
-  const allDone = progress.every((p) => p.quizDone && p.drillDone);
-  const doneCount = progress.filter((p) => p.quizDone && p.drillDone).length;
+  const allDone = progress.every(isDone);
+  const doneCount = progress.filter(isDone).length;
 
   // ROUND-5: while the user works on one step, prepare the next one, so the
   // ~30 s generations mostly happen in the background. Errors are ignored
@@ -32,10 +34,11 @@ export function LiveRound({ round }: { round: LiveRoundData }) {
   useEffect(() => {
     if (!fn || !state) return;
     if (!state.drillDone) void postOnce(`/api/round-functions/${fn.roundFunctionId}/drill`);
+    if (state.quizDone && !state.suggestionsDone) void postOnce(`/api/round-functions/${fn.roundFunctionId}/suggestions`);
     if (state.quizDone && nextQuizId) void postOnce(`/api/round-functions/${nextQuizId}/quiz`);
   }, [fn, state, nextQuizId]);
 
-  function mark(key: "quizDone" | "drillDone") {
+  function mark(key: "quizDone" | "drillDone" | "suggestionsDone") {
     setProgress((old) => old.map((p, i) => (i === index ? { ...p, [key]: true } : p)));
   }
 
@@ -73,7 +76,14 @@ export function LiveRound({ round }: { round: LiveRoundData }) {
         <DrillPanel key={`drill-${fn.roundFunctionId}`} roundFunctionId={fn.roundFunctionId} onDone={() => mark("drillDone")} />
       )}
 
-      {state.quizDone && state.drillDone && (
+      {state.quizDone && state.drillDone && !state.suggestionsDone && (
+        <section className="mt-8 border-t pt-5">
+          <h2 className="mb-3 text-sm font-semibold">Defend your choices</h2>
+          <SuggestionCards key={`sugg-${fn.roundFunctionId}`} roundFunctionId={fn.roundFunctionId} onDone={() => mark("suggestionsDone")} />
+        </section>
+      )}
+
+      {isDone(state) && (
         <div className="mt-6 flex flex-col items-start gap-2 border-t pt-5">
           {index < round.functions.length - 1 ? (
             <Button onClick={() => setIndex(index + 1)} data-testid="button-next-function">
@@ -92,7 +102,7 @@ export function LiveRound({ round }: { round: LiveRoundData }) {
               )}
             </Button>
           ) : (
-            <Button variant="outline" onClick={() => setIndex(progress.findIndex((p) => !p.quizDone || !p.drillDone))}>
+            <Button variant="outline" onClick={() => setIndex(progress.findIndex((p) => !isDone(p)))}>
               Back to the unfinished function
             </Button>
           )}

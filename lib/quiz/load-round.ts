@@ -11,6 +11,7 @@ export type LiveRoundFunction = {
   reason: string | null;
   quizDone: boolean;
   drillDone: boolean;
+  suggestionsDone: boolean;
 };
 
 export type LiveRoundData = { id: string; repo: string; status: string; functions: LiveRoundFunction[] };
@@ -27,6 +28,7 @@ const RoundSchema = z.object({
       functions: z.object({ name: z.string(), qualified_name: z.string().nullable(), file_path: z.string() }),
       quiz_items: z.array(z.object({ answer: z.string().nullable() })),
       drills: z.array(z.object({ status: z.string().nullable() })),
+      suggestions: z.array(z.object({ kind: z.string().nullable(), evidence: z.unknown(), user_verdict: z.string().nullable() })),
     }),
   ),
 });
@@ -38,7 +40,7 @@ export async function loadLiveRound(userId: string, roundId: string): Promise<{ 
   const { data, error } = await client.data
     .from("rounds")
     .select(
-      "id, status, repos(owner, name), round_functions(id, position, selection_reason, functions(name, qualified_name, file_path), quiz_items(answer), drills(status))",
+      "id, status, repos(owner, name), round_functions(id, position, selection_reason, functions(name, qualified_name, file_path), quiz_items(answer), drills(status), suggestions(kind, evidence, user_verdict))",
     )
     .eq("id", roundId)
     .eq("user_id", userId)
@@ -63,6 +65,10 @@ export async function loadLiveRound(userId: string, roundId: string): Promise<{ 
           reason: rf.selection_reason,
           quizDone: rf.quiz_items.length > 0 && rf.quiz_items.every((q) => q.answer !== null),
           drillDone: rf.drills.some((d) => d.status === "submitted" || d.status === "skipped"),
+          // Done once suggestions were generated and every visible one has an answer.
+          suggestionsDone:
+            rf.suggestions.length > 0 &&
+            rf.suggestions.filter((s) => s.kind !== "library" || s.evidence !== null).every((s) => s.user_verdict !== null),
         })),
     },
   };
