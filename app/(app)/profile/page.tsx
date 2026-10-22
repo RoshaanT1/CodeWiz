@@ -10,6 +10,8 @@ export default async function ProfilePage() {
   const user = await requireAal2User("/profile");
   const result = await loadProfile(user.id);
   if (!result.ok) throw new Error(result.reason);
-  const name = typeof user.user_metadata.display_name === "string" ? user.user_metadata.display_name : (user.email ?? "Your profile");
+  const name = typeof user.user_metadata.full_name === "string" && user.user_metadata.full_name.trim()
+      ? user.user_metadata.full_name.trim()
+      : (user.email?.split("@")[0] ?? "Your profile");
   return <ProfileView name={name} email={user.email ?? ""} profile={result.data} />;
 }

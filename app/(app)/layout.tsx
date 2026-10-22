@@ -6,6 +6,7 @@ import {
   type WorkspaceUser,
 } from "@/components/app-shell/workspace-provider";
 import { requireAal2User } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
 
 // Always render per request: every page here depends on the session cookie.
 export const dynamic = "force-dynamic";
@@ -35,9 +36,16 @@ export default async function AppLayout({
   // until the visitor is signed in with a completed 2FA session.
   const user = await requireAal2User("/dashboard");
 
+  // The sidebar lists the user's real repos. A failed read shows an empty list.
+  const client = await createClient();
+  const { data } = client.ok
+    ? await client.data.from("repos").select("id, name").eq("user_id", user.id).eq("status", "indexed").order("created_at", { ascending: false }).limit(20)
+    : { data: null };
+  const repos = (data ?? []) as { id: string; name: string }[];
+
   return (
     <WorkspaceProvider user={toWorkspaceUser(user)}>
-      <AppShell>{children}</AppShell>
+      <AppShell repos={repos}>{children}</AppShell>
     </WorkspaceProvider>
   );
 }

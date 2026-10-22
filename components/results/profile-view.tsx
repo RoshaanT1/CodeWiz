@@ -19,7 +19,10 @@ const CATEGORY_LABEL: Record<string, string> = { entry: "Entry points", core: "C
 export function ProfileView({ name, email, profile }: { name: string; email: string; profile: ProfileData }) {
   const attempts = profile.skills.reduce((n, s) => n + s.attempts, 0);
   const caught = profile.skills.reduce((n, s) => n + s.caught, 0);
-  const weakest = [...profile.skills].filter((s) => s.attempts > 0).sort((a, b) => a.caught / a.attempts - b.caught / b.attempts)[0];
+  // Only types with misses are weak; a perfect record isn't a weak spot.
+  const weakest = [...profile.skills]
+    .filter((s) => s.attempts > 0 && s.caught < s.attempts)
+    .sort((a, b) => a.caught / a.attempts - b.caught / b.attempts)[0];
 
   return (
     <div className="mx-auto max-w-[1040px] fade-in">

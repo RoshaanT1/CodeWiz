@@ -115,7 +115,7 @@ export function LiveRepo({ repo }: { repo: RepoDetail }) {
           <section className="mb-7">
             <SectionTitle aside={<span className="text-xs text-muted-foreground">Click a function to move the map</span>}>Call map</SectionTitle>
             <div className="h-[360px] overflow-hidden rounded-md border bg-card">
-              <CallMap functions={mapFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} maxNodes={12} />
+              <CallMap functions={mapFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} maxNodes={6} />
             </div>
             <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
               {[
