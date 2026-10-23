@@ -27,15 +27,15 @@ export function RoundReport({ round }: { round: RoundResultsData }) {
           </Link>
         }
       />
-      <div className="mb-7 grid gap-3 sm:grid-cols-3">
+      <div className="mb-8 grid grid-cols-3 gap-2 sm:gap-3">
         {[
           ["Average understanding", average === null ? "Not scored yet" : `${average} / 100`],
           ["Functions", String(round.functions.length)],
           ["Bugs caught", planted ? `${caught} of ${planted}` : "No drills yet"],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-md border bg-card p-4">
-            <div className="text-xs text-muted-foreground">{label}</div>
-            <div className="mt-2 font-mono text-xl font-semibold text-primary">{value}</div>
+          <div key={label} className="flex min-w-0 flex-col justify-between rounded-md border bg-card p-3 sm:p-4">
+            <div className="text-[11px] leading-4 text-muted-foreground sm:text-xs">{label}</div>
+            <div className="mt-2 font-mono text-base font-semibold text-primary sm:text-xl">{value}</div>
           </div>
         ))}
       </div>
@@ -44,14 +44,14 @@ export function RoundReport({ round }: { round: RoundResultsData }) {
         <EmptyState title="No functions in this round" text="Start a new round from your dashboard." />
       ) : (
         <div className="space-y-8">
-          {round.functions.map((fn) => (
-            <section key={fn.roundFunctionId} data-testid={`result-function-${fn.functionId}`}>
-              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <h2 className="min-w-0 break-words text-base font-semibold">
-                  {fn.name}
-                  <span className="ml-2 break-all font-mono text-[11px] font-normal text-muted-foreground">{fn.file}</span>
-                </h2>
-                <span className="shrink-0 font-mono text-sm font-semibold text-primary">
+          {round.functions.map((fn, i) => (
+            <section key={fn.roundFunctionId} className={i ? "border-t pt-8" : ""} data-testid={`result-function-${fn.functionId}`}>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="break-words text-base font-semibold">{fn.name}</h2>
+                  <p className="mt-0.5 break-all font-mono text-[11px] text-muted-foreground">{fn.file}</p>
+                </div>
+                <span className="shrink-0 rounded-md bg-accent px-2 py-1 font-mono text-sm font-semibold text-primary">
                   {fn.score === null ? "Not scored" : `${fn.score} / 100`}
                 </span>
               </div>
@@ -61,14 +61,14 @@ export function RoundReport({ round }: { round: RoundResultsData }) {
                   {fn.quiz.map((q, i) => (
                     <div key={i} className="rounded-md border bg-card p-3 text-xs leading-5">
                       <div className="flex justify-between gap-3 font-medium">
-                        <span>{q.question}</span>
+                        <span className="min-w-0 break-words">{q.question}</span>
                         {q.score !== null && <span className="shrink-0 font-mono">{q.score}/2</span>}
                       </div>
-                      <p className="mt-1 text-muted-foreground">
+                      <p className="mt-1 break-words text-muted-foreground">
                         <span className="font-medium text-foreground">Your answer:</span> {q.answer || "No answer"}
                       </p>
                       {q.feedback && (
-                        <p className="mt-1 text-muted-foreground">
+                        <p className="mt-1 break-words text-muted-foreground">
                           <span className="font-medium text-foreground">AI feedback:</span> {q.feedback}
                         </p>
                       )}
