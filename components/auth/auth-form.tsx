@@ -43,12 +43,18 @@ const COPY = {
   },
 } as const;
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, aside, children }: { label: string; aside?: ReactNode; children: ReactNode }) {
   return (
-    <label className="mt-4 block text-xs font-medium">
-      {label}
-      {children}
-    </label>
+    <div className="mt-4">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="text-xs font-medium">{label}</span>
+        {aside}
+      </div>
+      <label className="block">
+        <span className="sr-only">{label}</span>
+        {children}
+      </label>
+    </div>
   );
 }
 
@@ -143,7 +149,16 @@ export function AuthForm({ mode, next }: Props) {
           data-testid="input-email"
         />
       </Field>
-      <Field label="Password">
+      <Field
+        label="Password"
+        aside={
+          !isSignUp && (
+            <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline" data-testid="link-forgot-password">
+              Forgot password?
+            </Link>
+          )
+        }
+      >
         <Input
           type="password"
           value={password}
