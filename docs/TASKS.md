@@ -169,6 +169,9 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
   - Highlighted code with line numbers. Click a line to flag it and write why, edit or remove flags, then submit.
   - Watch out: the line numbers on screen must match the stored code exactly.
   - Done when: flags survive a page reload before submitting.
+- [x] **DRILL-5 Bug tutor** (Core, Roshaan). Needs DRILL-4, GRADE-4
+  - "Stuck? Show me the bugs" submits the drill as it is. Each bug then offers the tutor (contract K): it explains the bug, asks the user to explain it back, and explains it another way until they get it, up to 4 tries.
+  - Done when: a missed bug can be explained, a good answer ends the lesson with "You've got it", and the tutor refuses before the drill is submitted.
 
 **Gig 2 (required):** when DRILL-3 is done, the agent prepares it automatically (see GIGS.md).
 
