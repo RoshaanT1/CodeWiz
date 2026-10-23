@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Clipboard, Command, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, Clipboard, Code2, KeyRound, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -208,45 +208,48 @@ export function TwoFactorForm({ mode, next }: Props) {
       pattern="[0-9]*"
       maxLength={6}
       placeholder="000000"
-      className="mt-2 font-mono tracking-[.35em]"
+      className="mt-2 h-11 indent-[.35em] text-center font-mono text-base tracking-[.35em]"
       disabled={pending}
       data-testid="input-2fa-code"
     />
   );
 
   return (
-    <div className="min-h-[100dvh]">
-      <header className="mx-auto flex max-w-[1200px] px-5 py-5">
-        <Link href="/" className="inline-flex items-center gap-2 font-semibold text-foreground">
+    <div className="flex min-h-[100dvh] flex-col">
+      <header className="mx-auto flex w-full max-w-[1040px] items-center justify-between px-5 py-5">
+        <Link href="/" className="inline-flex items-center gap-2 font-semibold tracking-tight text-foreground">
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Command size={15} />
+            <Code2 size={16} />
           </span>
           codewiz
         </Link>
       </header>
-      <main className="mx-auto mt-9 max-w-md px-5">
-        <div className="rounded-lg border bg-card p-6 sm:p-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-primary">
-            {setup ? <ShieldCheck size={19} /> : <Command size={19} />}
-          </div>
-          <h1 className="mt-5 text-xl font-semibold">
-            {setup ? "Set up two-factor authentication" : "Verify it’s you"}
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+      {/* The card sits in the middle of the space left under the header. */}
+      <main className="mx-auto flex w-full max-w-[1040px] flex-1 items-center justify-center px-5 pb-16 pt-4 md:pb-24">
+        <div className="w-full max-w-[400px] rounded-lg border bg-card p-6 sm:p-8">
+          <div className="text-center">
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg bg-accent text-primary">
+              {setup ? <ShieldCheck size={21} /> : <KeyRound size={21} />}
+            </div>
+            <h1 className="mt-4 text-2xl font-semibold tracking-tight">
+              {setup ? "Set up two-factor authentication" : "Verify it’s you"}
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
             {setup
               ? "Scan the QR code with your authenticator app, then enter the six-digit code to protect your account."
               : "Enter the six-digit code from your authenticator app to continue."}
-          </p>
+            </p>
+          </div>
 
           {loading ? (
-            <p role="status" className="mt-5 animate-pulse text-sm text-muted-foreground">
+            <p role="status" className="mt-6 animate-pulse text-center text-sm text-muted-foreground">
               Preparing your 2FA check…
             </p>
           ) : (
             <form onSubmit={onSubmit} noValidate>
               {setup && factor && (
                 <>
-                  <div className="my-5 rounded-md border bg-muted/30 p-4">
+                  <div className="my-6 rounded-md border bg-muted/30 p-4">
                     <div className="text-xs font-semibold">Authenticator QR code</div>
                     <div
                       className="mt-3 flex justify-center rounded-md border bg-white p-4"
@@ -256,19 +259,19 @@ export function TwoFactorForm({ mode, next }: Props) {
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={qrCodeSrc(factor.qrCode)} alt="QR code for your authenticator app" className="h-36 w-36" />
                     </div>
-                    <p className="mt-2 text-center text-[10px] text-muted-foreground">
+                    <p className="mt-3 text-center text-xs text-muted-foreground">
                       Can’t scan it? Enter the setup key below instead.
                     </p>
                   </div>
                   <label className="block text-xs font-medium">Setup key</label>
                   <div className="mt-2 flex gap-2">
                     <code
-                      className="flex flex-1 items-center break-all rounded-md border bg-muted/40 px-3 font-mono text-xs tracking-wider"
+                      className="flex min-w-0 flex-1 items-center break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-[11px] leading-5 tracking-tight"
                       data-testid="text-setup-secret"
                     >
                       {factor.secret}
                     </code>
-                    <Button type="button" variant="outline" onClick={copySecret} aria-label="Copy setup key" data-testid="button-copy-secret">
+                    <Button type="button" variant="outline" className="shrink-0" onClick={copySecret} aria-label="Copy setup key" data-testid="button-copy-secret">
                       {copied ? <Check size={14} /> : <Clipboard size={14} />}
                       <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
                     </Button>
@@ -280,7 +283,7 @@ export function TwoFactorForm({ mode, next }: Props) {
                   )}
                 </>
               )}
-              <label htmlFor="totp-code" className="mt-5 block text-xs font-medium">
+              <label htmlFor="totp-code" className={`${setup ? "mt-5" : "mt-6"} block text-xs font-medium`}>
                 {setup ? "Six-digit confirmation code" : "Verification code"}
                 {codeInput}
               </label>
