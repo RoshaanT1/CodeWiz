@@ -1,247 +1,166 @@
 import { PYTHON_STDLIB_MODULES } from "./python-stdlib";
 
+export { PYTHON_STDLIB_MODULES } from "./python-stdlib";
+
 export type Ecosystem = "npm" | "pypi" | "python_stdlib";
 
 export type VerifyPackageOptions = {
   ecosystem: Ecosystem;
+  /** npm or PyPI package name, or a stdlib module such as "functools" or "os.path". */
+  package: string;
+  /** The function the suggestion relies on, e.g. "debounce" or "lru_cache". */
+  functionName: string;
+  /** Defaults to the global fetch. Pass your own for tests or proxies. */
+  fetch?: typeof fetch;
+  /** Per-request timeout. Defaults to 8000 ms. */
+  timeoutMs?: number;
+};
+
+export type Verification = {
+  ecosystem: Ecosystem;
   package: string;
   functionName: string;
-  timeoutMs?: number;
-  fetchFn?: typeof fetch;
+  /** The package is in its registry, or the module is in the stdlib list. */
+  exists: boolean;
+  /** The function name appears in the README, description or docs page. */
+  functionFound: boolean;
+  /** Where the function name was found. */
+  foundIn: "readme" | "description" | "docs" | null;
+  /** exists and functionFound: only show the suggestion when this is true. */
+  verified: boolean;
+  docsUrl: string | null;
 };
 
-export type VerifyPackageResult = {
-  exists: boolean;
-  mentionedInDocs: boolean;
-  docsUrl: string | null;
-  description?: string;
-  reason?: string;
+export type VerifyPackageResult = { ok: true; data: Verification } | { ok: false; reason: string };
+
+const NPM_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/;
+const PYPI_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
+const MODULE_NAME = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+const FUNCTION_NAME = /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/;
+
+/** True when `name` (its last dotted part) appears in `text` as a whole word. */
+export function mentionsFunction(text: string, functionName: string): boolean {
+  const last = functionName.split(".").pop() ?? functionName;
+  const escaped = last.replace(/[$]/g, "\\$");
+  return new RegExp(`(^|[^A-Za-z0-9_$])${escaped}([^A-Za-z0-9_$]|$)`).test(text);
+}
+
+async function getJson(
+  url: string,
+  fetchFn: typeof fetch,
+  timeoutMs: number,
+): Promise<{ ok: true; status: number; body: unknown } | { ok: false; reason: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchFn(url, { signal: controller.signal, headers: { Accept: "application/json" } });
+    if (res.status === 404) return { ok: true, status: 404, body: null };
+    if (!res.ok) return { ok: false, reason: `${new URL(url).host} returned ${res.status}` };
+    return { ok: true, status: res.status, body: (await res.json()) as unknown };
+  } catch (err) {
+    const aborted = err instanceof Error && err.name === "AbortError";
+    return { ok: false, reason: aborted ? `${new URL(url).host} timed out` : `Couldn't reach ${new URL(url).host}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function getText(
+  url: string,
+  fetchFn: typeof fetch,
+  timeoutMs: number,
+): Promise<{ ok: true; status: number; text: string } | { ok: false; reason: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchFn(url, { signal: controller.signal });
+    if (res.status === 404) return { ok: true, status: 404, text: "" };
+    if (!res.ok) return { ok: false, reason: `${new URL(url).host} returned ${res.status}` };
+    return { ok: true, status: res.status, text: await res.text() };
+  } catch (err) {
+    const aborted = err instanceof Error && err.name === "AbortError";
+    return { ok: false, reason: aborted ? `${new URL(url).host} timed out` : `Couldn't reach ${new URL(url).host}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const str = (value: unknown): string => (typeof value === "string" ? value : "");
+const record = (value: unknown): Record<string, unknown> =>
+  typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+const httpUrl = (value: unknown): string | null => {
+  const s = str(value);
+  return /^https?:\/\//.test(s) ? s : null;
 };
+
+function found(
+  base: Pick<Verification, "ecosystem" | "package" | "functionName">,
+  exists: boolean,
+  texts: { readme?: string; description?: string; docs?: string },
+  docsUrl: string | null,
+): Verification {
+  const foundIn =
+    !exists ? null
+    : texts.readme && mentionsFunction(texts.readme, base.functionName) ? "readme"
+    : texts.description && mentionsFunction(texts.description, base.functionName) ? "description"
+    : texts.docs && mentionsFunction(texts.docs, base.functionName) ? "docs"
+    : null;
+  return { ...base, exists, functionFound: foundIn !== null, foundIn, verified: exists && foundIn !== null, docsUrl: exists ? docsUrl : null };
+}
 
 /**
- * Checks whether a package exists in npm, PyPI, or the Python standard library,
- * and verifies that the suggested function or method name is mentioned in its
- * documentation, README, or description.
- *
- * Prevents AI hallucinations from recommending non-existent libraries or fake functions.
+ * Checks that a package suggested by an AI is real: it exists in npm or PyPI
+ * (or the Python standard library), and the function it relies on appears in
+ * the package's README, description or docs. Never throws. Network failures
+ * return ok: false; a missing package returns ok: true with verified false.
  */
-export async function verifyPackage(
-  options: VerifyPackageOptions,
-): Promise<VerifyPackageResult> {
-  const pkg = options.package.trim();
-  const fn = options.functionName.trim();
-  const fetcher = options.fetchFn ?? fetch;
+export async function verifyPackage(options: VerifyPackageOptions): Promise<VerifyPackageResult> {
+  const fetchFn = options.fetch ?? fetch;
   const timeoutMs = options.timeoutMs ?? 8000;
+  const name = options.package.trim();
+  const functionName = options.functionName.trim();
+  const base = { ecosystem: options.ecosystem, package: name, functionName };
 
-  if (!pkg) {
-    return {
-      exists: false,
-      mentionedInDocs: false,
-      docsUrl: null,
-      reason: "Package name is empty.",
-    };
+  if (!FUNCTION_NAME.test(functionName)) return { ok: false, reason: "functionName must be an identifier like debounce or os.path.join" };
+
+  if (options.ecosystem === "npm") {
+    if (!NPM_NAME.test(name)) return { ok: false, reason: `"${name}" isn't a valid npm package name` };
+    const res = await getJson(`https://registry.npmjs.org/${name.replace("/", "%2F")}`, fetchFn, timeoutMs);
+    if (!res.ok) return res;
+    if (res.status === 404) return { ok: true, data: found(base, false, {}, null) };
+    const doc = record(res.body);
+    const latest = str(record(doc["dist-tags"]).latest);
+    const latestVersion = record(record(doc.versions)[latest]);
+    const readme = str(doc.readme) || str(latestVersion.readme);
+    const description = str(doc.description) || str(latestVersion.description);
+    const docsUrl = httpUrl(doc.homepage) ?? `https://www.npmjs.com/package/${name}`;
+    return { ok: true, data: found(base, true, { readme, description }, docsUrl) };
   }
 
-  try {
-    switch (options.ecosystem) {
-      case "python_stdlib":
-        return verifyPythonStdlib(pkg, fn, fetcher, timeoutMs);
-      case "npm":
-        return await verifyNpm(pkg, fn, fetcher, timeoutMs);
-      case "pypi":
-        return await verifyPyPi(pkg, fn, fetcher, timeoutMs);
-      default:
-        return {
-          exists: false,
-          mentionedInDocs: false,
-          docsUrl: null,
-          reason: `Unsupported ecosystem: ${String(options.ecosystem)}`,
-        };
-    }
-  } catch (err) {
-    return {
-      exists: false,
-      mentionedInDocs: false,
-      docsUrl: null,
-      reason: `Verification request failed: ${err instanceof Error ? err.message : String(err)}`,
-    };
+  if (options.ecosystem === "pypi") {
+    if (!PYPI_NAME.test(name)) return { ok: false, reason: `"${name}" isn't a valid PyPI package name` };
+    const res = await getJson(`https://pypi.org/pypi/${name}/json`, fetchFn, timeoutMs);
+    if (!res.ok) return res;
+    if (res.status === 404) return { ok: true, data: found(base, false, {}, null) };
+    const info = record(record(res.body).info);
+    const urls = record(info.project_urls);
+    const docsUrl =
+      httpUrl(urls.Documentation) ?? httpUrl(info.docs_url) ?? httpUrl(urls.Homepage) ?? httpUrl(info.home_page) ?? `https://pypi.org/project/${name}/`;
+    return { ok: true, data: found(base, true, { readme: str(info.description), description: str(info.summary) }, docsUrl) };
   }
+
+  if (!MODULE_NAME.test(name)) return { ok: false, reason: `"${name}" isn't a valid Python module name` };
+  const topLevel = name.split(".")[0] ?? name;
+  if (!PYTHON_STDLIB_MODULES.has(topLevel)) return { ok: true, data: found(base, false, {}, null) };
+  const docsUrl = `https://docs.python.org/3/library/${name}.html`;
+  const page = await getText(docsUrl, fetchFn, timeoutMs);
+  if (!page.ok) return page;
+  // Some submodules share their parent's page.
+  if (page.status === 404 && topLevel !== name) {
+    const parentUrl = `https://docs.python.org/3/library/${topLevel}.html`;
+    const parent = await getText(parentUrl, fetchFn, timeoutMs);
+    if (!parent.ok) return parent;
+    return { ok: true, data: found(base, true, { docs: parent.text }, parentUrl) };
+  }
+  return { ok: true, data: found(base, true, { docs: page.text }, docsUrl) };
 }
-
-async function verifyPythonStdlib(
-  pkg: string,
-  functionName: string,
-  fetcher: typeof fetch,
-  timeoutMs: number,
-): Promise<VerifyPackageResult> {
-  const normalizedModule = pkg.toLowerCase();
-  const exists = PYTHON_STDLIB_MODULES.has(normalizedModule);
-
-  if (!exists) {
-    return {
-      exists: false,
-      mentionedInDocs: false,
-      docsUrl: null,
-      reason: `'${pkg}' is not a Python standard library module.`,
-    };
-  }
-
-  const docsUrl = `https://docs.python.org/3/library/${encodeURIComponent(normalizedModule)}.html`;
-
-  if (!functionName) {
-    return { exists: true, mentionedInDocs: true, docsUrl };
-  }
-
-  // Attempt to check if function is mentioned on the official docs page
-  let mentionedInDocs = false;
-  try {
-    const res = await fetcher(docsUrl, {
-      signal: AbortSignal.timeout(timeoutMs),
-      headers: { "User-Agent": "CodeWiz-Package-Verifier/1.0" },
-    });
-
-    if (res.ok) {
-      const text = await res.text();
-      mentionedInDocs = containsIdentifier(text, functionName);
-    }
-  } catch {
-    // If external fetch fails, fallback to accepting module existence
-    mentionedInDocs = false;
-  }
-
-  return {
-    exists: true,
-    mentionedInDocs,
-    docsUrl,
-  };
-}
-
-async function verifyNpm(
-  pkg: string,
-  functionName: string,
-  fetcher: typeof fetch,
-  timeoutMs: number,
-): Promise<VerifyPackageResult> {
-  // Scoped packages like @types/node require URL encoding of the slash: @scope%2Fpkg
-  const encodedName = pkg.startsWith("@")
-    ? `@${encodeURIComponent(pkg.slice(1).split("/")[0])}%2F${encodeURIComponent(pkg.split("/")[1] || "")}`
-    : encodeURIComponent(pkg);
-
-  const registryUrl = `https://registry.npmjs.org/${encodedName}`;
-
-  const res = await fetcher(registryUrl, {
-    signal: AbortSignal.timeout(timeoutMs),
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "CodeWiz-Package-Verifier/1.0",
-    },
-  });
-
-  if (res.status === 404) {
-    return {
-      exists: false,
-      mentionedInDocs: false,
-      docsUrl: null,
-      reason: `Package '${pkg}' not found on npm.`,
-    };
-  }
-
-  if (!res.ok) {
-    return {
-      exists: false,
-      mentionedInDocs: false,
-      docsUrl: null,
-      reason: `npm registry returned status ${res.status}.`,
-    };
-  }
-
-  const data = (await res.json()) as {
-    description?: string;
-    readme?: string;
-    homepage?: string;
-  };
-
-  const docsUrl = data.homepage || `https://www.npmjs.com/package/${pkg}`;
-  const corpus = `${data.description ?? ""} ${data.readme ?? ""}`;
-  const mentionedInDocs = functionName ? containsIdentifier(corpus, functionName) : true;
-
-  return {
-    exists: true,
-    mentionedInDocs,
-    docsUrl,
-    description: data.description,
-  };
-}
-
-async function verifyPyPi(
-  pkg: string,
-  functionName: string,
-  fetcher: typeof fetch,
-  timeoutMs: number,
-): Promise<VerifyPackageResult> {
-  const pypiUrl = `https://pypi.org/pypi/${encodeURIComponent(pkg)}/json`;
-
-  const res = await fetcher(pypiUrl, {
-    signal: AbortSignal.timeout(timeoutMs),
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "CodeWiz-Package-Verifier/1.0",
-    },
-  });
-
-  if (res.status === 404) {
-    return {
-      exists: false,
-      mentionedInDocs: false,
-      docsUrl: null,
-      reason: `Package '${pkg}' not found on PyPI.`,
-    };
-  }
-
-  if (!res.ok) {
-    return {
-      exists: false,
-      mentionedInDocs: false,
-      docsUrl: null,
-      reason: `PyPI returned status ${res.status}.`,
-    };
-  }
-
-  const data = (await res.json()) as {
-    info?: {
-      summary?: string;
-      description?: string;
-      project_urls?: Record<string, string>;
-      package_url?: string;
-      home_page?: string;
-    };
-  };
-
-  const info = data.info ?? {};
-  const docsUrl =
-    info.project_urls?.Documentation ||
-    info.project_urls?.Homepage ||
-    info.home_page ||
-    info.package_url ||
-    `https://pypi.org/project/${pkg}/`;
-
-  const corpus = `${info.summary ?? ""} ${info.description ?? ""}`;
-  const mentionedInDocs = functionName ? containsIdentifier(corpus, functionName) : true;
-
-  return {
-    exists: true,
-    mentionedInDocs,
-    docsUrl,
-    description: info.summary,
-  };
-}
-
-function containsIdentifier(corpus: string, identifier: string): boolean {
-  if (!identifier) return true;
-  // Case-insensitive boundary match for the identifier name
-  const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(`(?:^|[^a-zA-Z0-9_$])${escaped}(?:$|[^a-zA-Z0-9_$])`, "i");
-  return regex.test(corpus);
-}
-
-export { PYTHON_STDLIB_MODULES };
