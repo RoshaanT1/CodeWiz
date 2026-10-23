@@ -63,9 +63,11 @@ export function ForgotPasswordForm({ expired }: { expired: boolean }) {
 
   return (
     <form onSubmit={onSubmit} noValidate className="rounded-lg border bg-card p-6 sm:p-8">
-      <div className="font-mono text-[11px] uppercase tracking-wider text-primary">Account recovery</div>
-      <h2 className="mt-2 text-xl font-semibold">Forgot your password?</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Enter your email and we&apos;ll send you a reset link.</p>
+      <div className="text-center">
+        <div className="font-mono text-[11px] uppercase tracking-wider text-primary">Account recovery</div>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight">Forgot your password?</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Enter your email and we&apos;ll send you a reset link.</p>
+      </div>
       {expired && (
         <p role="alert" className="mt-4 rounded-md border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-200" data-testid="status-reset-expired">
           That reset link has expired or was already used. Request a new one below.
