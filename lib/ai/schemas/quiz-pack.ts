@@ -29,6 +29,13 @@ export const QuizPackSchema = z.object({
 
 export type QuizPack = z.infer<typeof QuizPackSchema>;
 
+/** AI contract B, practice round: more questions on a function already quizzed. */
+export const MoreQuestionsSchema = z.object({
+  questions: z.array(QuizQuestionSchema).min(1).max(3),
+});
+
+export type MoreQuestions = z.infer<typeof MoreQuestionsSchema>;
+
 /** AI contract C: grade one answer against its rubric. */
 export const GradeAnswerSchema = z.object({
   score: z.union([z.literal(0), z.literal(1), z.literal(2)]),

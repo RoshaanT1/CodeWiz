@@ -3,14 +3,25 @@ import { CheckCircle2, CircleAlert, CircleX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { DrillResult, FindingOutcome } from "@/lib/grading/drill-result";
 
+import { BugTutor } from "./bug-tutor";
+
 const OUTCOME: Record<FindingOutcome, { label: string; className: string }> = {
   caught: { label: "Caught", className: "text-emerald-700 dark:text-emerald-300" },
   false_alarm: { label: "False alarm", className: "text-muted-foreground" },
   possible_real_bug: { label: "Possible real bug", className: "text-amber-700 dark:text-amber-300" },
 };
 
-/** GRADE-4: each planted bug next to its original, plus how each flag was graded. */
-export function DrillResults({ result }: { result: DrillResult }) {
+/** Strips the indentation the original and changed lines share, so short snippets don't start halfway across a phone screen. */
+function dedent(original: string[], changed: string[]): { original: string; changed: string } {
+  const indentOf = (line: string) => line.length - line.trimStart().length;
+  const indents = [...original, ...changed].filter((l) => l.trim()).map(indentOf);
+  const cut = indents.length ? Math.min(...indents) : 0;
+  const strip = (lines: string[]) => lines.map((l) => l.slice(Math.min(cut, indentOf(l)))).join("\n");
+  return { original: strip(original), changed: strip(changed) };
+}
+
+/** GRADE-4: each planted bug next to its original, plus how each flag was graded. With a drill id, each bug offers the tutor. */
+export function DrillResults({ result, drillId }: { result: DrillResult; drillId?: string }) {
   const caught = result.bugs.filter((b) => b.caught).length;
   return (
     <div className="space-y-6" data-testid="drill-results">
@@ -27,10 +38,12 @@ export function DrillResults({ result }: { result: DrillResult }) {
           </div>
         ) : (
           <div className="space-y-3">
-            {result.bugs.map((bug) => (
+            {result.bugs.map((bug) => {
+              const code = dedent(bug.originalLines, bug.changedLines);
+              return (
               <article key={bug.lineStart} className="overflow-hidden rounded-md border bg-card" data-testid={`drill-bug-${bug.lineStart}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-                  <div className="flex items-center gap-2 text-sm font-medium">
+                  <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
                     {bug.caught ? (
                       <CheckCircle2 size={15} className="text-emerald-600" aria-label="Caught" />
                     ) : (
@@ -44,28 +57,34 @@ export function DrillResults({ result }: { result: DrillResult }) {
                   </div>
                   <Badge variant="secondary">{bug.bugType.replaceAll("_", " ")}</Badge>
                 </div>
-                <div className="grid md:grid-cols-2">
-                  <div className="border-b p-4 md:border-b-0 md:border-r">
+                <div className="grid grid-cols-1 md:grid-cols-2">
+                  <div className="min-w-0 border-b p-4 md:border-b-0 md:border-r">
                     <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Original</div>
-                    <pre className="overflow-x-auto rounded bg-emerald-50 p-2 font-mono text-xs text-emerald-900 dark:bg-emerald-950/35 dark:text-emerald-200">
-                      {bug.originalLines.join("\n")}
+                    <pre className="whitespace-pre-wrap rounded bg-emerald-50 p-2 font-mono text-xs leading-5 text-emerald-900 [overflow-wrap:anywhere] dark:bg-emerald-950/35 dark:text-emerald-200">
+                      {code.original}
                     </pre>
                   </div>
-                  <div className="p-4">
+                  <div className="min-w-0 p-4">
                     <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Changed</div>
-                    <pre className="overflow-x-auto rounded bg-red-50 p-2 font-mono text-xs text-red-900 dark:bg-red-950/35 dark:text-red-200">
-                      {bug.changedLines.join("\n")}
+                    <pre className="whitespace-pre-wrap rounded bg-red-50 p-2 font-mono text-xs leading-5 text-red-900 [overflow-wrap:anywhere] dark:bg-red-950/35 dark:text-red-200">
+                      {code.changed}
                     </pre>
-                    <p className="mt-3 text-xs leading-5">
+                    <p className="mt-3 text-xs leading-5 [overflow-wrap:anywhere]">
                       <strong>What it breaks:</strong> {bug.explanation}
                     </p>
-                    <p className="mt-2 rounded bg-muted p-2 text-xs leading-5">
+                    <p className="mt-2 rounded bg-muted p-2 text-xs leading-5 [overflow-wrap:anywhere]">
                       <strong>Fix:</strong> <code className="font-mono">{bug.fix}</code>
                     </p>
                   </div>
                 </div>
+                {drillId && (
+                  <div className="border-t bg-muted/30 px-4 py-3">
+                    <BugTutor drillId={drillId} lineStart={bug.lineStart} missed={!bug.caught} />
+                  </div>
+                )}
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

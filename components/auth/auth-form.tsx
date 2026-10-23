@@ -29,6 +29,7 @@ const COPY = {
     switchLabel: "Create an account",
     switchHref: "/sign-up",
     passwordAutoComplete: "current-password",
+    passwordPlaceholder: "Your password",
   },
   "sign-up": {
     eyebrow: "New workspace",
@@ -40,15 +41,22 @@ const COPY = {
     switchLabel: "Sign in",
     switchHref: "/sign-in",
     passwordAutoComplete: "new-password",
+    passwordPlaceholder: "At least 8 characters",
   },
 } as const;
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, aside, children }: { label: string; aside?: ReactNode; children: ReactNode }) {
   return (
-    <label className="mt-4 block text-xs font-medium">
-      {label}
-      {children}
-    </label>
+    <div className="mt-4">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="text-xs font-medium">{label}</span>
+        {aside}
+      </div>
+      <label className="block">
+        <span className="sr-only">{label}</span>
+        {children}
+      </label>
+    </div>
   );
 }
 
@@ -115,9 +123,11 @@ export function AuthForm({ mode, next }: Props) {
 
   return (
     <form onSubmit={onSubmit} noValidate className="rounded-lg border bg-card p-6 sm:p-8">
-      <div className="font-mono text-[11px] uppercase tracking-wider text-primary">{copy.eyebrow}</div>
-      <h2 className="mt-2 text-xl font-semibold">{copy.title}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">{copy.subtitle}</p>
+      <div className="text-center">
+        <div className="font-mono text-[11px] uppercase tracking-wider text-primary">{copy.eyebrow}</div>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight">{copy.title}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{copy.subtitle}</p>
+      </div>
       {isSignUp && (
         <Field label="Your name">
           <Input
@@ -143,13 +153,22 @@ export function AuthForm({ mode, next }: Props) {
           data-testid="input-email"
         />
       </Field>
-      <Field label="Password">
+      <Field
+        label="Password"
+        aside={
+          !isSignUp && (
+            <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline" data-testid="link-forgot-password">
+              Forgot password?
+            </Link>
+          )
+        }
+      >
         <Input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete={copy.passwordAutoComplete}
-          placeholder="At least 8 characters"
+          placeholder={copy.passwordPlaceholder}
           disabled={pending}
           aria-invalid={error ? true : undefined}
           data-testid="input-password"

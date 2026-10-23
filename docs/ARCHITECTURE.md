@@ -93,6 +93,7 @@ All tables live in Supabase Postgres. Every user-owned table has a `user_id` col
 3. Every later sign-in is password, then a 6-digit code. Only then does the session reach AAL2.
 4. Middleware sends any session below AAL2 to the 2FA step before it can open an app page.
 5. API routes check the assurance level too. The UI check alone isn't enough.
+6. Forgot password: `/forgot-password` asks Supabase to email a reset link (the same answer whether or not the account exists). The link carries a one-time token hash to `/auth/confirm`, which works in any browser, signs the user in for the reset and opens `/reset-password`. If the account has 2FA, the authenticator code is required before the new password is saved, so access to the inbox alone isn't enough. The recovery email template in Supabase must link to `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery`.
 
 Supabase's built-in email sender is rate-limited and meant for testing. Judges need to create two accounts quickly, so either turn off email confirmation for the event or set up a custom SMTP provider.
 
@@ -107,9 +108,11 @@ Route handlers live under `app/api/`. Every route checks the session is at AAL2,
 | `GET /api/repos/[id]/map` | Functions, call edges and coverage for the repo page | None |
 | `POST /api/rounds` | Rank candidates, pick functions with reasons, create the round | A |
 | `POST /api/round-functions/[id]/quiz` | Generate questions, rubrics and the explanation | B |
+| `POST /api/round-functions/[id]/quiz/more` | After every question is answered, add up to 3 practice questions (9 at most per function) | B |
 | `POST /api/quiz-items/[id]/answer` | Grade one answer | C |
 | `POST /api/round-functions/[id]/drill` | Plant bugs, verify them, store the drill and answer key | D, E |
 | `POST /api/drills/[id]/submit` | Grade the user's flags, run the real-bug check, reveal the answer key | F, G |
+| `POST /api/drills/[id]/tutor` | After submit, one tutor turn on a planted bug: explain, check the user's own explanation, explain again | K |
 | `POST /api/functions/[id]/explain` | Explain a function outside a round, and mark it as explained | B |
 | `POST /api/round-functions/[id]/suggestions` | Semgrep findings and library suggestions (extras) | H, I |
 | `POST /api/suggestions/[id]/respond` | Grade the user's reasoning (extras) | J |
@@ -142,6 +145,7 @@ We use route handlers rather than server actions because they're easier to test 
 | **H. Library suggestion** (extra) | Numbered code, language | Nothing, or `ecosystem` (npm, pypi or python_stdlib), `package`, `function`, `docs_url`, `why` | The package exists in its registry or the stdlib list, and the function name appears in its README or description. Otherwise drop it |
 | **I. Explain a Semgrep finding** (extra) | Rule id, message, lines, numbered code | `plain_explanation`, `question_to_user` | Lines are inside the function |
 | **J. Grade reasoning** (extra) | The suggestion, the user's agree or disagree, their reason, the code | `score` (0, 1 or 2), `feedback` | A well-argued disagreement can score 2 |
+| **K. Bug tutor** | A planted bug's answer key, original and changed lines, the changed function, the conversation so far | `understood`, `message`, `question` (or null when done) | Only after the drill is submitted. The first turn can't be "understood". At most 4 user answers; the last turn gives the full answer |
 
 ### Why "same line count" matters
 

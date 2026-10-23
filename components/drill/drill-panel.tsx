@@ -1,6 +1,6 @@
 "use client";
 
-import { Flag, Loader2, RotateCcw, X } from "lucide-react";
+import { Flag, LifeBuoy, Loader2, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +66,7 @@ export function DrillPanel({ roundFunctionId, onDone }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<DrillResult | null>(null);
+  const [confirmGiveUp, setConfirmGiveUp] = useState(false);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -176,11 +177,11 @@ export function DrillPanel({ roundFunctionId, onDone }: Props) {
     );
   }
 
-  if (result) return <DrillResults result={result} />;
+  if (result) return <DrillResults result={result} drillId={drill.drillId} />;
 
   const lines = drill.code.split("\n");
   return (
-    <div className="grid gap-5 lg:grid-cols-[1.35fr_0.75fr]" data-testid="drill-panel">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.75fr)]" data-testid="drill-panel">
       <section className="min-w-0">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">
@@ -191,7 +192,7 @@ export function DrillPanel({ roundFunctionId, onDone }: Props) {
             {flags.length} flag{flags.length === 1 ? "" : "s"}
           </Badge>
         </div>
-        <div className="overflow-auto rounded-md border bg-card font-mono text-xs leading-6" data-testid="drill-code">
+        <div className="max-h-[65svh] overflow-auto overscroll-contain rounded-md border bg-card font-mono text-xs leading-6 lg:max-h-none" data-testid="drill-code">
           {lines.map((line, i) => {
             const number = drill.startLine + i;
             const flagged = flags.some((f) => f.line === number);
@@ -204,11 +205,11 @@ export function DrillPanel({ roundFunctionId, onDone }: Props) {
                 aria-label={`Line ${number}${flagged ? ", flagged" : ""}`}
                 data-testid={`drill-line-${number}`}
               >
-                <span className="sticky left-0 flex w-14 shrink-0 items-center justify-end gap-1 border-r bg-card/90 px-2 text-muted-foreground">
+                <span className="sticky left-0 flex w-11 shrink-0 items-center justify-end gap-1 border-r bg-card px-1.5 text-muted-foreground sm:w-14 sm:px-2">
                   {flagged && <Flag size={11} className="text-amber-600" />}
                   {number}
                 </span>
-                <code className="whitespace-pre px-3">{line}</code>
+                <code className="whitespace-pre px-2.5 sm:px-3">{line}</code>
               </button>
             );
           })}
@@ -218,7 +219,7 @@ export function DrillPanel({ roundFunctionId, onDone }: Props) {
         </p>
       </section>
 
-      <aside className="space-y-3">
+      <aside className="space-y-3 lg:sticky lg:top-20 lg:self-start">
         <div className="rounded-md border bg-card p-4">
           <h3 className="text-sm font-semibold">{editing !== null ? "Edit flag" : "Add a flag"}</h3>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -274,6 +275,31 @@ export function DrillPanel({ roundFunctionId, onDone }: Props) {
             "Submit drill"
           )}
         </Button>
+
+        <div className="rounded-md border border-dashed p-3 text-xs" data-testid="drill-stuck">
+          {confirmGiveUp ? (
+            <>
+              <p className="leading-5">
+                {flags.length > 0
+                  ? `This submits your ${flags.length} flag${flags.length === 1 ? "" : "s"} as they are and shows every bug. Bugs you didn't flag count as missed.`
+                  : "This shows every bug, and they count as missed."}{" "}
+                Then the tutor can explain each one until it clicks.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => void submit()} disabled={submitting} data-testid="button-confirm-give-up">
+                  Show me the bugs
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirmGiveUp(false)} disabled={submitting}>
+                  Keep looking
+                </Button>
+              </div>
+            </>
+          ) : (
+            <button type="button" onClick={() => setConfirmGiveUp(true)} className="flex items-center gap-2 text-left text-muted-foreground hover:text-foreground" data-testid="button-give-up">
+              <LifeBuoy size={14} /> Stuck? Show me the bugs and explain them
+            </button>
+          )}
+        </div>
       </aside>
     </div>
   );
