@@ -103,6 +103,9 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 - [ ] **MAP-3 Folder picker** (Core, Fizzah). Needs IMPORT-3
   - For big or cut-off repos, let the user pick a folder before parsing.
   - Done when: a large repo can be imported by choosing one folder.
+- [x] **MAP-4 Paginate the function list** (Core, Roshaan). Needs MAP-1
+  - Show the repo's functions 25 at a time with previous and next buttons. Changing the category or search goes back to page 1.
+  - Done when: a repo with more than 25 functions shows "1–25 of N" and the next page shows the rest.
 
 **Gig 6 (bonus):** when MAP-2 is done, the agent prepares it automatically (see GIGS.md). Build the call map in `components/call-map/` with no data fetching inside, so it lifts out cleanly.
 
