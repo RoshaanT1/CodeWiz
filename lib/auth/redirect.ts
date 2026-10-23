@@ -3,6 +3,9 @@
 
 export const SIGN_IN_PATH = "/sign-in";
 export const SIGN_UP_PATH = "/sign-up";
+export const FORGOT_PASSWORD_PATH = "/forgot-password";
+/** Opened from the reset email with a recovery session; neither an auth page nor protected. */
+export const RESET_PASSWORD_PATH = "/reset-password";
 export const TWO_FACTOR_ENROL_PATH = "/2fa/enrol";
 export const TWO_FACTOR_VERIFY_PATH = "/2fa/verify";
 export const DEFAULT_AFTER_SIGN_IN = "/dashboard";
@@ -26,6 +29,7 @@ export function isAuthPage(pathname: string): boolean {
   return (
     pathname === SIGN_IN_PATH ||
     pathname === SIGN_UP_PATH ||
+    pathname === FORGOT_PASSWORD_PATH ||
     pathname === TWO_FACTOR_ENROL_PATH ||
     pathname === TWO_FACTOR_VERIFY_PATH
   );
