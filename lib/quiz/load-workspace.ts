@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
+import { displayName } from "@/lib/functions/display-name";
+
 import { createClient } from "@/lib/supabase/server";
 
 export type WorkspaceRepo = { id: string; owner: string; name: string; status: string; functionCount: number; createdAt: string };
@@ -114,7 +116,7 @@ export async function loadRepo(userId: string, repoId: string): Promise<{ ok: tr
       ...repo,
       functions: FunctionRows.parse(fns.data ?? []).map((f) => ({
         id: f.id,
-        name: f.qualified_name ?? f.name,
+        name: displayName(f.qualified_name ?? f.name, f.file_path),
         file: f.file_path,
         category: f.category ?? "helper",
         importance: f.importance ?? 0,
