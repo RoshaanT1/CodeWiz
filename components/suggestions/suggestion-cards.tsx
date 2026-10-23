@@ -106,7 +106,7 @@ export function SuggestionCards({ roundFunctionId, onDone }: { roundFunctionId: 
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground">AI-generated</span>
             </div>
             {item.library && (
-              <p className="text-sm font-medium">
+              <p className="text-sm font-medium [overflow-wrap:anywhere]">
                 Consider <code className="font-mono">{item.library.package}</code>
                 {item.library.functionName && item.library.functionName !== item.library.package && (
                   <>
@@ -124,7 +124,7 @@ export function SuggestionCards({ roundFunctionId, onDone }: { roundFunctionId: 
 
             {item.verdict === null ? (
               <>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   {(["agree", "disagree"] as const).map((v) => (
                     <Button
                       key={v}
