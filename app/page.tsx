@@ -17,11 +17,11 @@ function Ln({ n }: { n: number }) {
 
 export default function HomePage() {
   return (
-    <div className="min-h-[100dvh]">
-      <header className="mx-auto flex max-w-[1200px] items-center justify-between px-5 py-5">
+    <div className="flex min-h-[100dvh] flex-col">
+      <header className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 px-5 py-5">
         <Logo />
-        <div className="flex items-center gap-2">
-          <Link href="/sign-in" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground" data-testid="link-sign-in">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <Link href="/sign-in" className="px-2 py-2 sm:px-3 text-sm text-muted-foreground hover:text-foreground" data-testid="link-sign-in">
             Sign in
           </Link>
           <Link href="/sign-up">
@@ -31,44 +31,44 @@ export default function HomePage() {
           </Link>
         </div>
       </header>
-      <main className="mx-auto max-w-[1200px] px-5">
-        <section className="grid min-h-[490px] items-center gap-12 border-b py-16 md:grid-cols-[1fr_0.78fr] md:py-20">
-          <div className="fade-in max-w-[650px]">
-            <Badge variant="outline" className="mb-6 gap-1.5 font-mono text-[11px]">
+      <main className="mx-auto w-full max-w-[1200px] flex-1 px-5">
+        <section className="grid items-center gap-10 border-b pb-14 pt-8 sm:gap-12 sm:pb-16 sm:pt-12 lg:min-h-[520px] lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)] lg:gap-16 lg:py-20">
+          <div className="fade-in mx-auto max-w-[650px] text-center lg:mx-0 lg:text-left">
+            <Badge variant="outline" className="mb-5 gap-1.5 sm:mb-6 font-mono text-[11px]">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" /> A better way to read code
             </Badge>
-            <h1 className="text-4xl font-semibold leading-[1.12] tracking-[-0.045em] sm:text-5xl md:text-[54px]">
+            <h1 className="text-[34px] font-semibold leading-[1.1] tracking-[-0.04em] sm:text-5xl lg:text-[54px]">
               Prove you understand the code you ship
             </h1>
-            <p className="mt-6 max-w-[520px] text-[16px] leading-7 text-muted-foreground">
+            <p className="mx-auto mt-5 max-w-[520px] text-[15px] leading-7 text-muted-foreground sm:mt-6 sm:text-base lg:mx-0">
               Practice understanding real functions, trace their behavior, and catch the kind of bugs that make it into
               production.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/sign-up">
-                <Button size="lg" data-testid="button-start-learning">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
+              <Link href="/sign-up" className="sm:w-auto">
+                <Button size="lg" className="w-full sm:w-auto" data-testid="button-start-learning">
                   Start learning <ArrowRight size={15} />
                 </Button>
               </Link>
-              <Link href="/dashboard">
-                <Button size="lg" variant="outline" data-testid="button-view-demo">
+              <Link href="/dashboard" className="sm:w-auto">
+                <Button size="lg" variant="outline" className="w-full sm:w-auto" data-testid="button-view-demo">
                   Explore demo
                 </Button>
               </Link>
             </div>
-            <div className="mt-8 flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground sm:mt-8 lg:justify-start">
               <ShieldCheck size={14} className="text-primary" />
               Private by default · Your code stays yours
             </div>
           </div>
-          <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
+          <div className="mx-auto w-full max-w-[560px] overflow-hidden rounded-lg border bg-card shadow-sm lg:max-w-none">
             <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-3">
               <span className="h-2 w-2 rounded-full bg-muted-foreground/35" />
               <span className="h-2 w-2 rounded-full bg-muted-foreground/35" />
               <span className="h-2 w-2 rounded-full bg-muted-foreground/35" />
-              <span className="ml-2 font-mono text-[11px] text-muted-foreground">src/cache.ts · Cache.get</span>
+              <span className="ml-2 truncate font-mono text-[11px] text-muted-foreground">src/cache.ts · Cache.get</span>
             </div>
-            <div className="p-4 font-mono text-[12px] leading-7">
+            <div className="overflow-x-auto whitespace-pre p-3 font-mono text-[11px] leading-7 sm:p-4 sm:text-[12px]">
               <div>
                 <Ln n={18} />
                 <span className="syntax-key">get</span>(key: string) {"{"}
@@ -77,7 +77,7 @@ export default function HomePage() {
                 <Ln n={19} />
                 {"  "}const entry = this.store.get(key);
               </div>
-              <div className="rounded bg-amber-100/70 px-2 dark:bg-amber-900/20">
+              <div className="-mx-2 rounded bg-amber-100/70 px-2 dark:bg-amber-900/20">
                 <Ln n={20} />
                 {"  "}
                 <span className="syntax-key">if</span> (!entry?.value) <span className="syntax-key">return</span> undefined;
@@ -118,12 +118,12 @@ export default function HomePage() {
             </div>
           </div>
         </section>
-        <section className="grid gap-10 border-b py-14 md:grid-cols-[230px_1fr]">
+        <section className="grid gap-8 border-b py-12 sm:py-16 lg:grid-cols-[260px_1fr] lg:gap-10">
           <div>
             <div className="font-mono text-[11px] uppercase tracking-wider text-primary">A deliberate practice loop</div>
-            <h2 className="mt-3 text-2xl font-semibold tracking-tight">Read. Reason. Review.</h2>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-[28px]">Read. Reason. Review.</h2>
           </div>
-          <div className="grid gap-8 sm:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-3 sm:gap-8">
             {STEPS.map(([n, t, d]) => (
               <div key={n} className="border-t-2 border-primary/50 pt-4">
                 <span className="font-mono text-xs text-muted-foreground">{n}</span>
@@ -133,20 +133,20 @@ export default function HomePage() {
             ))}
           </div>
         </section>
-        <section className="flex flex-col items-start justify-between gap-6 py-12 sm:flex-row sm:items-center">
+        <section className="flex flex-col items-center justify-between gap-6 py-12 text-center sm:flex-row sm:py-16 sm:text-left">
           <div>
             <h2 className="text-xl font-semibold">Build confidence by reading code.</h2>
             <p className="mt-2 text-sm text-muted-foreground">Your next useful debugging instinct starts with practice.</p>
           </div>
-          <Link href="/sign-up">
-            <Button data-testid="button-sign-up-bottom">
+          <Link href="/sign-up" className="shrink-0">
+            <Button size="lg" data-testid="button-sign-up-bottom">
               Create your workspace <ArrowRight size={14} />
             </Button>
           </Link>
         </section>
       </main>
       <footer className="border-t">
-        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-5 py-5 text-xs text-muted-foreground">
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-5 py-6 text-xs text-muted-foreground">
           <Logo small />
           <span>CodeWiz · Learn by understanding.</span>
         </div>
