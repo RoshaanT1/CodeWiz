@@ -12,6 +12,7 @@ import { recordAiCalls } from "@/lib/ai/record-usage";
 import { QuizPackSchema, type QuizPack } from "@/lib/ai/schemas/quiz-pack";
 import { requireApiAal2Session } from "@/lib/auth/session";
 import { checkAiCap } from "@/lib/server/daily-cap";
+import { claimGeneration, releaseGeneration, waitForGenerated } from "@/lib/server/generation-claim";
 import { toQuizView, type QuizItemRow } from "@/lib/quiz/quiz-view";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -100,6 +101,22 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const cap = await checkAiCap(db, userId);
   if (!cap.ok) return error("RATE_LIMITED", cap.reason, 429);
 
+  // Only one request writes this quiz; an overlapping one waits for it.
+  const claim = await claimGeneration(db, userId, roundFunctionId, "quiz");
+  if (claim === "taken") {
+    const found = await waitForGenerated(async () => {
+      const { data } = await db.from("quiz_items").select(ITEM_COLUMNS).eq("round_function_id", roundFunctionId).eq("user_id", userId).order("id");
+      return data && data.length > 0 ? (data as QuizItemRow[]) : null;
+    });
+    if (!found) return error("UPSTREAM", "The questions are still being written. Try again in a moment.", 503);
+    const { data: fnNow } = await db.from("functions").select("explanation").eq("id", fn.id).maybeSingle<{ explanation: string | null }>();
+    return NextResponse.json({ ok: true as const, data: toQuizView(found, fnNow?.explanation ?? null) });
+  }
+  const fail = async (message: string, status = 502) => {
+    if (claim === "claimed") await releaseGeneration(db, userId, roundFunctionId, "quiz");
+    return error("UPSTREAM", message, status);
+  };
+
   const calls = callCounter();
   const llm = loggedLlm({ route: "quiz", temperature: 0.5, maxTokens: 1800, onCall: calls.onCall });
   const { systemPrompt, prompt } = buildQuizPackPrompt({
@@ -130,12 +147,23 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     pack = result.data;
   }
   await recordAiCalls(db, userId, calls.count);
-  if (!pack) return error("UPSTREAM", "We couldn't write questions for this function. Try again.", 502);
+  if (!pack) return fail("We couldn't write questions for this function. Try again.");
 
   // Rubrics go in quiz_answer_keys, which has no read policy for signed-in
   // users, so they can't be fetched through the database API before answering.
+  // Another request (for example one started before a page reload) may have
+  // saved a quiz while this one was waiting on the model: use that one.
+  const { data: raced } = await db.from("quiz_items").select(ITEM_COLUMNS).eq("round_function_id", roundFunctionId).eq("user_id", userId).order("id");
+  if (raced && raced.length > 0) {
+    const { data: fnNow } = await db.from("functions").select("explanation").eq("id", fn.id).maybeSingle<{ explanation: string | null }>();
+    return NextResponse.json({ ok: true as const, data: toQuizView(raced as QuizItemRow[], fnNow?.explanation ?? null) });
+  }
+
   const admin = createAdminClient();
-  if (!admin.ok) return error("SERVER_CONFIG", admin.reason, 500);
+  if (!admin.ok) {
+    if (claim === "claimed") await releaseGeneration(db, userId, roundFunctionId, "quiz");
+    return error("SERVER_CONFIG", admin.reason, 500);
+  }
   const questions = pack.questions.map((q) => ({ ...q, id: randomUUID() }));
   const { data: inserted, error: insertError } = await db
     .from("quiz_items")
@@ -143,7 +171,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     .select(ITEM_COLUMNS);
   if (insertError || !inserted) {
     console.warn(`[quiz] quiz_items insert failed: ${insertError?.message}`);
-    return error("UPSTREAM", "Couldn't save the quiz. Try again.", 502);
+    return fail("Couldn't save the quiz. Try again.");
   }
   const { error: keyError } = await admin.data
     .from("quiz_answer_keys")
@@ -157,7 +185,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     );
     if (fallbacks.some((r) => r.error)) {
       await db.from("quiz_items").delete().in("id", questions.map((q) => q.id)).eq("user_id", userId);
-      return error("UPSTREAM", "Couldn't save the quiz. Try again.", 502);
+      return fail("Couldn't save the quiz. Try again.");
     }
     await db.from("functions").update({ explanation: pack.explanation }).eq("id", fn.id).eq("user_id", userId);
   }

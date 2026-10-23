@@ -9,6 +9,7 @@ import { plantVerifiedBugs } from "@/lib/ai/plant-bugs";
 import { recordAiCalls } from "@/lib/ai/record-usage";
 import { requireApiAal2Session } from "@/lib/auth/session";
 import { checkAiCap } from "@/lib/server/daily-cap";
+import { claimGeneration, releaseGeneration, waitForGenerated } from "@/lib/server/generation-claim";
 import { bugTypesForLanguage } from "@/lib/bug-planter";
 import { weakBugTypes } from "@/lib/scoring/weak-bug-types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -114,6 +115,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const cap = await checkAiCap(db, userId);
   if (!cap.ok) return error("RATE_LIMITED", cap.reason, 429);
 
+  // Only one request plants this drill; an overlapping one waits for it.
+  const claim = await claimGeneration(db, userId, roundFunctionId, "drill");
+  if (claim === "taken") {
+    const found = await waitForGenerated(async () => {
+      const { data } = await db.from("drills").select("id, changed_code, status").eq("round_function_id", roundFunctionId).eq("user_id", userId).order("id").limit(1).maybeSingle();
+      return data ?? null;
+    }, 55000);
+    if (!found) return error("UPSTREAM", "The drill is still being planted. Try again in a moment.", 503);
+    const drill = DrillRowSchema.parse(found);
+    const { count } = await admin.data.from("planted_bugs").select("id", { count: "exact", head: true }).eq("drill_id", drill.id).eq("user_id", userId);
+    return NextResponse.json({ ok: true as const, data: toView(drill, fn, count ?? 0) });
+  }
+
   const calls = callCounter();
   const planted = await plantVerifiedBugs(
     {
@@ -127,6 +141,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   );
   await recordAiCalls(db, userId, calls.count);
 
+  // Another request may have stored a drill while this one was planting: use that one.
+  const { data: raced } = await db
+    .from("drills")
+    .select("id, changed_code, status")
+    .eq("round_function_id", roundFunctionId)
+    .eq("user_id", userId)
+    .order("id")
+    .limit(1)
+    .maybeSingle();
+  if (raced) {
+    const drill = DrillRowSchema.parse(raced);
+    const { count } = await admin.data.from("planted_bugs").select("id", { count: "exact", head: true }).eq("drill_id", drill.id).eq("user_id", userId);
+    return NextResponse.json({ ok: true as const, data: toView(drill, fn, count ?? 0) });
+  }
+
   const { data: inserted, error: insertError } = await db
     .from("drills")
     .insert({
@@ -137,7 +166,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     })
     .select("id, changed_code, status")
     .single();
-  if (insertError || !inserted) return error("UPSTREAM", "Couldn't save the drill. Try again.", 502);
+  if (insertError || !inserted) {
+    if (claim === "claimed") await releaseGeneration(db, userId, roundFunctionId, "drill");
+    return error("UPSTREAM", "Couldn't save the drill. Try again.", 502);
+  }
   const drill = DrillRowSchema.parse(inserted);
 
   if (!planted.ok) {
@@ -158,6 +190,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   );
   if (bugsError) {
     await db.from("drills").delete().eq("id", drill.id).eq("user_id", userId);
+    if (claim === "claimed") await releaseGeneration(db, userId, roundFunctionId, "drill");
     return error("UPSTREAM", "Couldn't save the drill's answer key. Try again.", 502);
   }
 
