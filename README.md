@@ -10,8 +10,8 @@ Built for the [Devmarketplace Hackathon](https://devmarketplace.dev).
 
 ## Demo
 
-<!-- TODO before submitting: add the real Vercel URL and the demo video link (DOC-4, DOC-5). -->
-Live site and demo video: see the Devpost submission.
+Live site: **https://codewiz-wine.vercel.app**  
+<!-- TODO before submitting: add the demo video link (DOC-4). -->
 
 ---
 
