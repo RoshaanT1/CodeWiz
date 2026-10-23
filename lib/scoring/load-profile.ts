@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
+import { displayName } from "@/lib/functions/display-name";
+
 import { coverage, type CategoryCoverage } from "@/lib/scoring/coverage";
 import { createClient } from "@/lib/supabase/server";
 
@@ -70,7 +72,7 @@ export async function loadProfile(userId: string): Promise<{ ok: true; data: Pro
       skills: skillRows.map((s) => ({ bugType: s.bug_type, attempts: s.attempts, caught: s.caught })),
       functionScores: scoreRows.map((s) => ({
         functionId: s.function_id,
-        name: s.functions?.qualified_name ?? s.functions?.name ?? "Unknown function",
+        name: s.functions ? displayName(s.functions.qualified_name ?? s.functions.name, s.functions.file_path) : "Unknown function",
         file: s.functions?.file_path ?? "",
         score: s.score ?? 0,
       })),

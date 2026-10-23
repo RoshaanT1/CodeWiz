@@ -71,7 +71,7 @@ In the Next.js App Router, the component runs on the client. Server pages can st
 | `calls` | `CallMapCall[]` | Yes | Who calls whom |
 | `selectedId` | `string` | Yes | The function shown in the middle |
 | `onSelect` | `(id: string) => void` | No | Called when a node is clicked. Update `selectedId` here to move the view |
-| `maxNodes` | `number` | No | The most callers or callees shown on each side. Default: 20 |
+| `maxNodes` | `number` | No | The most callers or callees shown on each side. Default: 8 |
 | `categoryColors` | `Partial<Record<Category, string>>` | No | Override the colour for any category |
 | `className` | `string` | No | Extra classes for the outer element |
 
