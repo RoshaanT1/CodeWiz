@@ -5,9 +5,8 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { EmptyState, PageTitle, SectionTitle } from "@/components/app-shell/page-parts";
-import { CallMap, type Category } from "@/components/call-map";
+import { CallMap, CATEGORY_COLORS, CATEGORY_LABELS, OverviewMap, type Category } from "@/components/call-map";
 import { MetricsPanel } from "@/components/metrics/metrics-panel";
-import { RepoGraphWorkspace, transformRepoToGraph } from "@/components/repo-graph";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,27 +30,10 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
   const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
   const selected = functions.find((f) => f.id === selectedId);
-  const [view, setView] = useState<"map" | "graph">("map");
-  const repoGraph = useMemo(
-    () =>
-      transformRepoToGraph(
-        { id: repo.id, owner: repo.owner, name: repo.name, status: repo.status },
-        repo.functions.map((f) => ({
-          id: f.id,
-          name: f.name,
-          qualifiedName: f.name,
-          filePath: f.file,
-          category: f.category as Category,
-          importance: f.importance,
-          callers: f.metrics.callers,
-          callees: f.metrics.callees,
-          branches: f.metrics.branches,
-          dataAccess: f.metrics.dataAccess,
-          explained: !f.eligible,
-        })),
-        repo.calls,
-      ),
-    [repo],
+  const [view, setView] = useState<"overview" | "map">("overview");
+  const overviewFunctions = useMemo(
+    () => repo.functions.map((f) => ({ id: f.id, name: f.name, file: f.file, category: f.category as Category, importance: f.importance, eligible: f.eligible })),
+    [repo.functions],
   );
 
   async function explain() {
@@ -142,8 +124,8 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
                 <div className="flex gap-1" role="tablist" aria-label="Map view">
                   {(
                     [
+                      ["overview", "Overview"],
                       ["map", "Call map"],
-                      ["graph", "Repo graph"],
                     ] as const
                   ).map(([key, label]) => (
                     <Button
@@ -161,34 +143,27 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
                 </div>
               }
             >
-              {view === "map" ? "Call map" : "Repository graph"}
+              {view === "overview" ? "Most important functions" : "Call map"}
             </SectionTitle>
-            {view === "map" ? (
-              <div className="h-[360px] overflow-hidden rounded-md border bg-card">
-                <CallMap functions={mapFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} maxNodes={6} />
+            <p className="-mt-1 mb-3 text-xs text-muted-foreground">
+              {view === "overview"
+                ? "The most important functions and the code that calls or is called by them, from entry points to helpers. Arrows point from caller to callee. Click one to select it."
+                : `Who calls ${selected?.name ?? "this function"}, and what it calls. Click any card to move the map to it.`}
+            </p>
+            {view === "overview" ? (
+              <div className="h-[460px] overflow-hidden rounded-md border bg-card">
+                <OverviewMap functions={overviewFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} limit={14} />
               </div>
             ) : (
-              <div className="overflow-hidden rounded-md border bg-card" data-testid="repo-graph">
-                <RepoGraphWorkspace
-                  graph={repoGraph}
-                  status="ready"
-                  onStartRoundWithFunction={(fnId) => {
-                    setSelectedId(fnId);
-                    setView("map");
-                  }}
-                />
+              <div className="h-[460px] overflow-hidden rounded-md border bg-card">
+                <CallMap functions={mapFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} maxNodes={6} />
               </div>
             )}
-            <div className={`mt-2 flex-wrap gap-3 text-[11px] text-muted-foreground ${view === "map" ? "flex" : "hidden"}`}>
-              {[
-                ["entry", "hsl(220 70% 50%)"],
-                ["core", "hsl(262 60% 55%)"],
-                ["data", "hsl(158 60% 40%)"],
-                ["helper", "hsl(38 80% 50%)"],
-              ].map(([name, color]) => (
-                <span key={name} className="flex items-center gap-1">
-                  <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
-                  {name}
+            <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+              {(Object.keys(CATEGORY_COLORS) as Category[]).map((cat) => (
+                <span key={cat} className="flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: CATEGORY_COLORS[cat] }} />
+                  {CATEGORY_LABELS[cat]}
                 </span>
               ))}
             </div>

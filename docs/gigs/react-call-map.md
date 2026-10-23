@@ -18,7 +18,7 @@ TypeScript (TSX), from `components/call-map/README.md`, lines 28 to 59 (the Usag
 
 ## Files to upload
 
-Upload `~/Desktop/react-call-map.zip`: `call-map-graph.tsx`, its one-line `index.ts` (`export * from "./call-map-graph"`), and `README.md`. In the app, `components/call-map/index.tsx` is Fizzah's call map with the same props; the gig is the standalone `call-map-graph.tsx` version.
+Upload `~/Desktop/react-call-map.zip`: `call-map-graph.tsx` (the call map), `overview-map.tsx` (the overview of the most important functions), `index.ts` and `README.md`. The app uses these same files.
 
 ## Read ME
 

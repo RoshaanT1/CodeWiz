@@ -43,7 +43,19 @@ const RoundFunctionSchema = z.object({
   }),
 });
 
-const ITEM_COLUMNS = "id, kind, question, answer, score, feedback";
+/** Everything needed to grade an answer and teach afterwards; never sent before the answer. */
+function answerKey(q: QuizPack["questions"][number], explanation: string | null) {
+  return {
+    ...q.rubric,
+    lines: q.lines,
+    correct_index: q.correct_index,
+    why_correct: q.why_correct,
+    best_practice: q.best_practice,
+    ...(explanation ? { explanation } : {}),
+  };
+}
+
+const ITEM_COLUMNS = "id, kind, question, answer, score, feedback, options, correct_option, recommendation";
 const MAX_CALLER_LINES = 15;
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -118,7 +130,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   };
 
   const calls = callCounter();
-  const llm = loggedLlm({ route: "quiz", temperature: 0.5, maxTokens: 1800, onCall: calls.onCall });
+  const llm = loggedLlm({ route: "quiz", temperature: 0.5, maxTokens: 3000, onCall: calls.onCall });
   const { systemPrompt, prompt } = buildQuizPackPrompt({
     code: fn.code,
     startLine: fn.start_line,
@@ -167,7 +179,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const questions = pack.questions.map((q) => ({ ...q, id: randomUUID() }));
   const { data: inserted, error: insertError } = await db
     .from("quiz_items")
-    .insert(questions.map((q) => ({ id: q.id, user_id: userId, round_function_id: roundFunctionId, kind: q.kind, question: q.question, rubric: null })))
+    .insert(questions.map((q) => ({ id: q.id, user_id: userId, round_function_id: roundFunctionId, kind: q.kind, question: q.question, rubric: null, options: q.options })))
     .select(ITEM_COLUMNS);
   if (insertError || !inserted) {
     console.warn(`[quiz] quiz_items insert failed: ${insertError?.message}`);
@@ -175,13 +187,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   }
   const { error: keyError } = await admin.data
     .from("quiz_answer_keys")
-    .insert(questions.map((q) => ({ quiz_item_id: q.id, user_id: userId, rubric: { ...q.rubric, lines: q.lines, explanation: pack.explanation } })));
+    .insert(questions.map((q) => ({ quiz_item_id: q.id, user_id: userId, rubric: answerKey(q, pack.explanation) })));
   if (keyError) {
     // Until migration 20250101000300 is applied the table doesn't exist, so
     // keep the rubric on quiz_items as before rather than failing the quiz.
     console.warn(`[quiz] quiz_answer_keys insert failed (${keyError.code}): ${keyError.message}; storing rubrics on quiz_items`);
     const fallbacks = await Promise.all(
-      questions.map((q) => db.from("quiz_items").update({ rubric: { ...q.rubric, lines: q.lines } }).eq("id", q.id).eq("user_id", userId)),
+      questions.map((q) => db.from("quiz_items").update({ rubric: answerKey(q, null) }).eq("id", q.id).eq("user_id", userId)),
     );
     if (fallbacks.some((r) => r.error)) {
       await db.from("quiz_items").delete().in("id", questions.map((q) => q.id)).eq("user_id", userId);

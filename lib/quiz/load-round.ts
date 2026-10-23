@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
+import { displayName } from "@/lib/functions/display-name";
+
 import { createClient } from "@/lib/supabase/server";
 
 export type LiveRoundFunction = {
@@ -60,7 +62,7 @@ export async function loadLiveRound(userId: string, roundId: string): Promise<{ 
         .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
         .map((rf) => ({
           roundFunctionId: rf.id,
-          name: rf.functions.qualified_name ?? rf.functions.name,
+          name: displayName(rf.functions.qualified_name ?? rf.functions.name, rf.functions.file_path),
           file: rf.functions.file_path,
           reason: rf.selection_reason,
           quizDone: rf.quiz_items.length > 0 && rf.quiz_items.every((q) => q.answer !== null),
