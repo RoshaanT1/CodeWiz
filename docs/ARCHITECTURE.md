@@ -111,6 +111,7 @@ Route handlers live under `app/api/`. Every route checks the session is at AAL2,
 | `POST /api/quiz-items/[id]/answer` | Grade one answer | C |
 | `POST /api/round-functions/[id]/drill` | Plant bugs, verify them, store the drill and answer key | D, E |
 | `POST /api/drills/[id]/submit` | Grade the user's flags, run the real-bug check, reveal the answer key | F, G |
+| `POST /api/drills/[id]/tutor` | After submit, one tutor turn on a planted bug: explain, check the user's own explanation, explain again | K |
 | `POST /api/functions/[id]/explain` | Explain a function outside a round, and mark it as explained | B |
 | `POST /api/round-functions/[id]/suggestions` | Semgrep findings and library suggestions (extras) | H, I |
 | `POST /api/suggestions/[id]/respond` | Grade the user's reasoning (extras) | J |
@@ -143,6 +144,7 @@ We use route handlers rather than server actions because they're easier to test 
 | **H. Library suggestion** (extra) | Numbered code, language | Nothing, or `ecosystem` (npm, pypi or python_stdlib), `package`, `function`, `docs_url`, `why` | The package exists in its registry or the stdlib list, and the function name appears in its README or description. Otherwise drop it |
 | **I. Explain a Semgrep finding** (extra) | Rule id, message, lines, numbered code | `plain_explanation`, `question_to_user` | Lines are inside the function |
 | **J. Grade reasoning** (extra) | The suggestion, the user's agree or disagree, their reason, the code | `score` (0, 1 or 2), `feedback` | A well-argued disagreement can score 2 |
+| **K. Bug tutor** | A planted bug's answer key, original and changed lines, the changed function, the conversation so far | `understood`, `message`, `question` (or null when done) | Only after the drill is submitted. The first turn can't be "understood". At most 4 user answers; the last turn gives the full answer |
 
 ### Why "same line count" matters
 
