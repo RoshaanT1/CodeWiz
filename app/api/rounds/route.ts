@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { requireApiAal2Session } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { checkDailyCap, incrementRoundCount } from "@/lib/server/daily-cap";
+import { checkAiCap } from "@/lib/server/daily-cap";
 import { apiError } from "@/lib/server/responses";
 import { selectFunctions } from "@/lib/selection/select-ai";
 import { weakBugTypes } from "@/lib/scoring";
@@ -57,19 +57,17 @@ export async function POST(request: Request) {
   }
   const { repo_id, size } = parsed.data;
 
-  const cap = await checkDailyCap(userId);
+  const tempClient = await createClient();
+  if (!tempClient.ok) return apiError("UPSTREAM", tempClient.reason, 503);
+  const cap = await checkAiCap(tempClient.data, userId);
   if (!cap.ok) {
-    if (cap.status === 429) {
-      audit("round.daily_cap_exceeded", {
-        requestId, userId, route: "/api/rounds", method: "POST",
-      });
-    }
-    const errorCode = cap.status === 429 ? "RATE_LIMITED" : "UPSTREAM";
-    return apiError(errorCode, cap.reason, cap.status);
+    audit("round.daily_cap_exceeded", {
+      requestId, userId, route: "/api/rounds", method: "POST",
+    });
+    return apiError("RATE_LIMITED", cap.reason, 429);
   }
 
-  const client = await createClient();
-  if (!client.ok) return apiError("UPSTREAM", client.reason, 503);
+  const client = tempClient;
 
   // Verify repo ownership.
   const { data: repo } = await client.data
@@ -152,7 +150,7 @@ export async function POST(request: Request) {
     return apiError("UPSTREAM", "Failed to create round functions.", 500);
   }
 
-  await incrementRoundCount(userId);
+  // Round count is tracked via the rounds table; no separate increment needed.
 
   audit("round.create", {
     requestId, userId, route: "/api/rounds", method: "POST",

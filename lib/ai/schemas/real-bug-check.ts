@@ -14,3 +14,18 @@ export const RealBugCheckOutputSchema = z.object({
 
 export type RealBugEvidence = z.infer<typeof RealBugEvidenceSchema>;
 export type RealBugCheckOutput = z.infer<typeof RealBugCheckOutputSchema>;
+
+/** One step in the tool-loop: either a tool call or the final answer. */
+export const RealBugStepSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("get_function"), function_id: z.string() }),
+  z.object({ action: z.literal("get_callers"), function_id: z.string() }),
+  z.object({ action: z.literal("search"), text: z.string().min(1) }),
+  z.object({
+    action: z.literal("answer"),
+    verdict: z.enum(["false_alarm", "possible_real_bug"]),
+    reason: z.string().min(5),
+    evidence: z.array(RealBugEvidenceSchema),
+  }),
+]);
+
+export type RealBugStep = z.infer<typeof RealBugStepSchema>;

@@ -8,7 +8,13 @@ export const TWO_FACTOR_VERIFY_PATH = "/2fa/verify";
 export const DEFAULT_AFTER_SIGN_IN = "/dashboard";
 
 /** Paths that need a signed-in user. Checked on the server in middleware. */
-const PROTECTED_PREFIXES = ["/dashboard"];
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/repo",
+  "/round",
+  "/results",
+  "/profile",
+];
 
 export function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(
