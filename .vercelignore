@@ -1,0 +1,5 @@
+# Local-only folders and notes; never upload them to Vercel.
+CodeWiz-learning-app/
+supabase/.temp/
+night-log.md
+.env*.local
