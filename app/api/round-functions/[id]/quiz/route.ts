@@ -13,6 +13,7 @@ import { QuizPackSchema, type QuizPack } from "@/lib/ai/schemas/quiz-pack";
 import { requireApiAal2Session } from "@/lib/auth/session";
 import { checkAiCap } from "@/lib/server/daily-cap";
 import { claimGeneration, releaseGeneration, waitForGenerated } from "@/lib/server/generation-claim";
+import { answerKey } from "@/lib/quiz/answer-key";
 import { toQuizView, type QuizItemRow } from "@/lib/quiz/quiz-view";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -42,18 +43,6 @@ const RoundFunctionSchema = z.object({
     explanation: z.string().nullable(),
   }),
 });
-
-/** Everything needed to grade an answer and teach afterwards; never sent before the answer. */
-function answerKey(q: QuizPack["questions"][number], explanation: string | null) {
-  return {
-    ...q.rubric,
-    lines: q.lines,
-    correct_index: q.correct_index,
-    why_correct: q.why_correct,
-    best_practice: q.best_practice,
-    ...(explanation ? { explanation } : {}),
-  };
-}
 
 const ITEM_COLUMNS = "id, kind, question, answer, score, feedback, options, correct_option, recommendation";
 const MAX_CALLER_LINES = 15;

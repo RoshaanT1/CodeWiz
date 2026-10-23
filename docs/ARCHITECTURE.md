@@ -107,6 +107,7 @@ Route handlers live under `app/api/`. Every route checks the session is at AAL2,
 | `GET /api/repos/[id]/map` | Functions, call edges and coverage for the repo page | None |
 | `POST /api/rounds` | Rank candidates, pick functions with reasons, create the round | A |
 | `POST /api/round-functions/[id]/quiz` | Generate questions, rubrics and the explanation | B |
+| `POST /api/round-functions/[id]/quiz/more` | After every question is answered, add up to 3 practice questions (9 at most per function) | B |
 | `POST /api/quiz-items/[id]/answer` | Grade one answer | C |
 | `POST /api/round-functions/[id]/drill` | Plant bugs, verify them, store the drill and answer key | D, E |
 | `POST /api/drills/[id]/submit` | Grade the user's flags, run the real-bug check, reveal the answer key | F, G |
