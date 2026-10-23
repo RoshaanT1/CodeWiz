@@ -38,7 +38,7 @@ export function ProfileView({ name, email, profile }: { name: string; email: str
           </Link>
         }
       />
-      <div className="mb-7 grid gap-3 sm:grid-cols-3">
+      <div className="mb-8 grid gap-3 sm:grid-cols-3">
         {[
           ["Functions reviewed", String(profile.functionScores.length), `Across ${profile.rounds.length} round${profile.rounds.length === 1 ? "" : "s"}`],
           ["Bugs caught", String(caught), `Of ${attempts} planted`],
@@ -67,7 +67,7 @@ export function ProfileView({ name, email, profile }: { name: string; email: str
                     <Bar percent={fn.score} />
                   </div>
                 </div>
-                <div className="w-16 text-right font-mono text-sm font-semibold text-primary">
+                <div className="w-16 shrink-0 text-right font-mono text-sm font-semibold text-primary">
                   {fn.score}
                   <span className="text-[10px] font-normal text-muted-foreground"> / 100</span>
                 </div>
@@ -131,11 +131,11 @@ export function ProfileView({ name, email, profile }: { name: string; email: str
               <Link
                 key={r.id}
                 href={r.status === "completed" ? `/results/${r.id}` : `/round/${r.id}`}
-                className="flex items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-muted/50"
+                className="flex flex-col gap-1 px-4 py-3 text-sm hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                 data-testid={`profile-round-${r.id}`}
               >
                 <span className="min-w-0 truncate font-medium">{r.repo}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground sm:shrink-0">
                   {r.size} functions · {new Date(r.createdAt).toLocaleDateString()} · {r.status === "completed" ? "Completed" : "In progress"}
                 </span>
               </Link>
