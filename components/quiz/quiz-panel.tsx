@@ -129,7 +129,7 @@ export function QuizPanel({ roundFunctionId, onDone }: Props) {
 
   if (loadError) {
     return (
-      <div className="rounded-md border border-destructive/40 bg-card p-5 text-sm" role="alert">
+      <div className="max-w-3xl rounded-md border border-destructive/40 bg-card p-5 text-sm" role="alert">
         <p className="font-medium">We couldn&apos;t load the questions.</p>
         <p className="mt-1 text-muted-foreground">{loadError}</p>
         <Button variant="outline" size="sm" className="mt-3" onClick={() => void load()}>
@@ -141,7 +141,7 @@ export function QuizPanel({ roundFunctionId, onDone }: Props) {
 
   if (!quiz) {
     return (
-      <div className="flex items-center gap-3 rounded-md border bg-card p-5 text-sm text-muted-foreground" data-testid="quiz-loading">
+      <div className="flex max-w-3xl items-center gap-3 rounded-md border bg-card p-5 text-sm text-muted-foreground" data-testid="quiz-loading">
         <Loader2 size={16} className="animate-spin" />
         Reading the function and writing questions about it…
       </div>
@@ -152,8 +152,8 @@ export function QuizPanel({ roundFunctionId, onDone }: Props) {
 
   if (mode === null) {
     return (
-      <div className="rounded-md border bg-card p-5" data-testid="quiz-mode-chooser">
-        <h2 className="text-sm font-semibold">How do you want to answer?</h2>
+      <div className="max-w-3xl rounded-md border bg-card p-4 sm:p-5" data-testid="quiz-mode-chooser">
+        <h2 className="text-base font-semibold">How do you want to answer?</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           {quiz.items.length} questions about this function. Your choice applies to the whole quiz.
         </p>
@@ -185,7 +185,7 @@ export function QuizPanel({ roundFunctionId, onDone }: Props) {
 
   const asked = quiz.items.length;
   return (
-    <div className="space-y-4" data-testid="quiz-panel">
+    <div className="max-w-3xl space-y-4" data-testid="quiz-panel">
       <p className="text-xs text-muted-foreground" data-testid="quiz-mode-label">
         Answering as <span className="font-medium text-foreground">{mode === "choice" ? "multiple choice" : "written answers"}</span>
       </p>
@@ -235,7 +235,7 @@ export function QuizPanel({ roundFunctionId, onDone }: Props) {
                 )}
                 {item.id === nextOpen && (
                   <Button
-                    className="mt-2"
+                    className="mt-3 w-full sm:w-auto"
                     onClick={() => void submit(item)}
                     disabled={busy !== null || (asChoice && picks[item.id] === undefined)}
                     data-testid={`button-quiz-submit-${i}`}
@@ -266,7 +266,7 @@ export function QuizPanel({ roundFunctionId, onDone }: Props) {
         <div className="rounded-md border border-primary/30 bg-card p-4" data-testid="quiz-explanation">
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Explanation · AI-generated</div>
           <p className="text-sm leading-6">{explanation}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <Button onClick={onDone} data-testid="button-quiz-continue">
               Continue to the bug drill
             </Button>

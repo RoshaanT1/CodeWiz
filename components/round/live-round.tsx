@@ -65,10 +65,19 @@ export function LiveRound({ round }: { round: LiveRoundData }) {
         title={fn.name}
         description={fn.reason ?? fn.file}
       />
-      <div className="mb-6 h-1.5 overflow-hidden rounded-full bg-muted" aria-label={`${doneCount} of ${round.functions.length} functions done`}>
-        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(doneCount / round.functions.length) * 100}%` }} />
+      <div className="mb-6">
+        <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+          <span className="min-w-0 truncate font-mono" title={fn.file}>
+            {fn.file}
+          </span>
+          <span className="shrink-0">
+            {doneCount} of {round.functions.length} done
+          </span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-label={`${doneCount} of ${round.functions.length} functions done`}>
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(doneCount / round.functions.length) * 100}%` }} />
+        </div>
       </div>
-      <p className="mb-4 font-mono text-[11px] text-muted-foreground">{fn.file}</p>
 
       {!state.quizDone ? (
         <QuizPanel key={`quiz-${fn.roundFunctionId}`} roundFunctionId={fn.roundFunctionId} onDone={() => mark("quizDone")} />
@@ -77,8 +86,8 @@ export function LiveRound({ round }: { round: LiveRoundData }) {
       )}
 
       {state.quizDone && state.drillDone && !state.suggestionsDone && (
-        <section className="mt-8 border-t pt-5">
-          <h2 className="mb-3 text-sm font-semibold">Defend your choices</h2>
+        <section className="mt-8 border-t pt-6">
+          <h2 className="mb-3 text-base font-semibold">Defend your choices</h2>
           <SuggestionCards key={`sugg-${fn.roundFunctionId}`} roundFunctionId={fn.roundFunctionId} onDone={() => mark("suggestionsDone")} />
         </section>
       )}
