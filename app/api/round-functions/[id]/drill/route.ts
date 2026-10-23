@@ -127,6 +127,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   );
   await recordAiCalls(db, userId, calls.count);
 
+  // Another request may have stored a drill while this one was planting: use that one.
+  const { data: raced } = await db
+    .from("drills")
+    .select("id, changed_code, status")
+    .eq("round_function_id", roundFunctionId)
+    .eq("user_id", userId)
+    .order("id")
+    .limit(1)
+    .maybeSingle();
+  if (raced) {
+    const drill = DrillRowSchema.parse(raced);
+    const { count } = await admin.data.from("planted_bugs").select("id", { count: "exact", head: true }).eq("drill_id", drill.id).eq("user_id", userId);
+    return NextResponse.json({ ok: true as const, data: toView(drill, fn, count ?? 0) });
+  }
+
   const { data: inserted, error: insertError } = await db
     .from("drills")
     .insert({
