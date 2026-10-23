@@ -41,12 +41,12 @@ export async function suggestLibrary(
   }
 
   const verified = await deps.verify({ ecosystem: suggestion.ecosystem, package: suggestion.package, functionName: suggestion.function });
-  if (!verified.ok) return { ok: true, data: null, dropped: verified.reason };
-  if (!verified.data.verified || !verified.data.docsUrl) {
+  if (!verified.exists) return { ok: true, data: null, dropped: verified.reason ?? `${suggestion.package} doesn't exist` };
+  if (!verified.mentionedInDocs || !verified.docsUrl) {
     return {
       ok: true,
       data: null,
-      dropped: verified.data.exists ? `${suggestion.package} doesn't document ${suggestion.function}` : `${suggestion.package} doesn't exist`,
+      dropped: `${suggestion.package} doesn't document ${suggestion.function}`,
     };
   }
 
@@ -56,7 +56,7 @@ export async function suggestLibrary(
       ecosystem: suggestion.ecosystem,
       package: suggestion.package,
       functionName: suggestion.function,
-      docsUrl: verified.data.docsUrl,
+      docsUrl: verified.docsUrl,
       why: suggestion.why,
     },
   };
