@@ -53,10 +53,13 @@ export async function submitCredentials(
       return { status: "signed-in" };
     }
 
+    // Send the confirmation link back to this site (it must be in Supabase's
+    // redirect allow-list; otherwise Supabase falls back to the Site URL).
+    const emailRedirectTo = typeof window === "undefined" ? undefined : `${window.location.origin}/sign-in`;
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: name ? { data: { full_name: name } } : undefined,
+      options: { emailRedirectTo, ...(name ? { data: { full_name: name } } : {}) },
     });
     if (error) {
       return { status: "error", message: describeAuthError(error, mode) };
@@ -69,7 +72,8 @@ export async function submitCredentials(
         message: describeAuthError({ message: "", code: "user_already_exists" }, mode),
       };
     }
-    // Confirmation is off for this project, so a session comes back at once.
+    // With confirmation off a session comes back at once; with it on, the
+    // user confirms by email and then signs in.
     if (data.session) return { status: "signed-in" };
     return { status: "needs-confirmation" };
   } catch {

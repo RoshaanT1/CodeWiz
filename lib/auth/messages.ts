@@ -32,8 +32,10 @@ export function describeAuthError(
     case "signup_disabled":
       return "Sign-up is turned off for this project.";
     case "over_request_rate_limit":
-    case "over_email_send_rate_limit":
       return "Too many attempts. Wait a minute and try again.";
+    case "over_email_send_rate_limit":
+      // The confirmation email limit is per hour, so "a minute" isn't true.
+      return "We can't send another confirmation email right now. Try again later, or sign in if you've already confirmed your email.";
     default:
       break;
   }

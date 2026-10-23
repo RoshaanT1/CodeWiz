@@ -7,8 +7,8 @@ import { plantBugs, type PlanterLanguage, type PlanterLlm, type PlantBugsOptions
 import { loadLanguage } from "@/lib/repo-indexer/parser-loader";
 
 /** Model adapter for the bug planter, using the shared provider wrapper. */
-export function planterLlm(onCall?: (log: AiCallLog) => void): PlanterLlm {
-  return loggedLlm({ route: "drill", temperature: 0.7, maxTokens: 2000, onCall });
+export function planterLlm(onCall?: (log: AiCallLog) => void, maxTokens = 2000): PlanterLlm {
+  return loggedLlm({ route: "drill", temperature: 0.7, maxTokens, onCall });
 }
 
 function dedent(code: string): string {
@@ -59,10 +59,19 @@ export function makeParseCheck(original: string) {
   };
 }
 
+/**
+ * The model returns the whole changed function, so a fixed limit cut long
+ * functions off mid-JSON. Budget about one token per 3 characters of code,
+ * twice over (code plus explanations and escaping), within sane bounds.
+ */
+export function plantTokenBudget(code: string): number {
+  return Math.min(16000, Math.max(2000, Math.ceil(code.length / 3) * 2 + 1000));
+}
+
 /** Plants and verifies bugs for one function with the app's model and parser. */
 export function plantVerifiedBugs(
   options: Omit<PlantBugsOptions, "llm" | "parse">,
   onCall?: (log: AiCallLog) => void,
 ): Promise<PlantBugsResult> {
-  return plantBugs({ ...options, llm: planterLlm(onCall), parse: makeParseCheck(options.code) });
+  return plantBugs({ ...options, llm: planterLlm(onCall, plantTokenBudget(options.code)), parse: makeParseCheck(options.code) });
 }

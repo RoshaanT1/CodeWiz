@@ -35,6 +35,8 @@ export function LiveDashboard({ name, repos, rounds }: { name: string; repos: Wo
       return;
     }
     router.push(`/repo/${res.data.repoId}`);
+    // The sidebar's repo list comes from the server layout; refresh it too.
+    router.refresh();
   }
 
   return (
