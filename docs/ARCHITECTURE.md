@@ -93,6 +93,7 @@ All tables live in Supabase Postgres. Every user-owned table has a `user_id` col
 3. Every later sign-in is password, then a 6-digit code. Only then does the session reach AAL2.
 4. Middleware sends any session below AAL2 to the 2FA step before it can open an app page.
 5. API routes check the assurance level too. The UI check alone isn't enough.
+6. Forgot password: `/forgot-password` asks Supabase to email a reset link (the same answer whether or not the account exists). The link carries a one-time token hash to `/auth/confirm`, which works in any browser, signs the user in for the reset and opens `/reset-password`. If the account has 2FA, the authenticator code is required before the new password is saved, so access to the inbox alone isn't enough. The recovery email template in Supabase must link to `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery`.
 
 Supabase's built-in email sender is rate-limited and meant for testing. Judges need to create two accounts quickly, so either turn off email confirmation for the event or set up a custom SMTP provider.
 
