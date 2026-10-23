@@ -129,6 +129,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .eq("round_function_id", item.data.round_function_id)
     .eq("user_id", userId)
     .order("id");
-  const view = toQuizView((rows ?? []) as QuizItemRow[], fn.explanation);
+  const quizRows = (rows ?? []) as QuizItemRow[];
+  let explanation = fn.explanation;
+  if (!explanation && quizRows.length > 0 && quizRows.every((r) => r.answer !== null)) {
+    // Every question is answered: release the explanation kept with the keys.
+    const admin = createAdminClient();
+    if (admin.ok) {
+      const { data: keys } = await admin.data
+        .from("quiz_answer_keys")
+        .select("rubric")
+        .in("quiz_item_id", quizRows.map((r) => r.id))
+        .eq("user_id", userId);
+      const stored = (keys ?? [])
+        .map((k: { rubric: unknown }) => (k.rubric as { explanation?: unknown } | null)?.explanation)
+        .find((e): e is string => typeof e === "string" && e.length > 0);
+      if (stored) {
+        explanation = stored;
+        await db.from("functions").update({ explanation: stored }).eq("id", fn.id).eq("user_id", userId);
+      }
+    }
+  }
+  const view = toQuizView(quizRows, explanation);
   return NextResponse.json({ ok: true as const, data: { ...view, answeredId: item.data.id, missedPoints } });
 }

@@ -147,7 +147,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   }
   const { error: keyError } = await admin.data
     .from("quiz_answer_keys")
-    .insert(questions.map((q) => ({ quiz_item_id: q.id, user_id: userId, rubric: { ...q.rubric, lines: q.lines } })));
+    .insert(questions.map((q) => ({ quiz_item_id: q.id, user_id: userId, rubric: { ...q.rubric, lines: q.lines, explanation: pack.explanation } })));
   if (keyError) {
     // Until migration 20250101000300 is applied the table doesn't exist, so
     // keep the rubric on quiz_items as before rather than failing the quiz.
@@ -159,8 +159,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       await db.from("quiz_items").delete().in("id", questions.map((q) => q.id)).eq("user_id", userId);
       return error("UPSTREAM", "Couldn't save the quiz. Try again.", 502);
     }
+    await db.from("functions").update({ explanation: pack.explanation }).eq("id", fn.id).eq("user_id", userId);
   }
-  await db.from("functions").update({ explanation: pack.explanation }).eq("id", fn.id).eq("user_id", userId);
+  // Otherwise the explanation waits in quiz_answer_keys: functions.explanation
+  // is readable by the user, so it's copied there only after the last answer.
 
   return NextResponse.json({ ok: true as const, data: toQuizView(inserted as QuizItemRow[], pack.explanation) });
 }
