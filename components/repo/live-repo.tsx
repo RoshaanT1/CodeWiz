@@ -212,7 +212,7 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
           </section>
 
           <h2 className="mb-3 text-base font-semibold">All functions</h2>
-          <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-wrap gap-1">
               {CATEGORIES.map((c) => (
                 <Button key={c} variant={category === c ? "secondary" : "ghost"} size="sm" className="capitalize" onClick={() => {
@@ -223,7 +223,7 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
                 </Button>
               ))}
             </div>
-            <div className="relative lg:w-64">
+            <div className="relative md:w-64">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input value={query} onChange={(e) => {
                   setQuery(e.target.value);
