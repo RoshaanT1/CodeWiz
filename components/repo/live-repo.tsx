@@ -101,13 +101,15 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
             <p className="mt-1 text-xs text-muted-foreground">
               The AI picks important functions you haven&apos;t reviewed. For each one: a short quiz, then a bug drill.
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {SIZES.map((s) => (
-                <Button key={s} variant={size === s ? "default" : "outline"} size="sm" onClick={() => setSize(s)} data-testid={`button-size-${s}`}>
-                  {s} functions
-                </Button>
-              ))}
-              <Button onClick={() => void start()} disabled={starting || eligible === 0} data-testid="button-start-round">
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="grid grid-cols-3 gap-2 sm:flex" role="group" aria-label="Round size">
+                {SIZES.map((s) => (
+                  <Button key={s} variant={size === s ? "default" : "outline"} size="sm" onClick={() => setSize(s)} data-testid={`button-size-${s}`}>
+                    {s} functions
+                  </Button>
+                ))}
+              </div>
+              <Button className="w-full sm:w-auto" onClick={() => void start()} disabled={starting || eligible === 0} data-testid="button-start-round">
                 {starting ? (
                   <>
                     <Loader2 size={14} className="animate-spin" /> Picking functions…
@@ -157,11 +159,11 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
                 : `Who calls ${selected?.name ?? "this function"}, and what it calls. Click any card to move the map to it.`}
             </p>
             {view === "overview" ? (
-              <div className="h-[460px] overflow-hidden rounded-md border bg-card">
+              <div className="h-[300px] overflow-hidden rounded-md border bg-card sm:h-[380px] lg:h-[460px]">
                 <OverviewMap functions={overviewFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} limit={14} />
               </div>
             ) : (
-              <div className="h-[460px] overflow-hidden rounded-md border bg-card">
+              <div className="h-[340px] overflow-hidden rounded-md border bg-card sm:h-[400px] lg:h-[460px]">
                 <CallMap functions={mapFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} maxNodes={6} />
               </div>
             )}
@@ -176,7 +178,7 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
             {selected && (
               <div className="mt-3 rounded-md border bg-card p-4" data-testid="explain-panel">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="min-w-0 truncate text-sm font-medium">{selected.name}</span>
+                  <span className="min-w-0 truncate text-sm font-semibold">{selected.name}</span>
                   {!explanations[selected.id] && (
                     <Button size="sm" variant="outline" onClick={() => void explain()} disabled={explaining} data-testid="button-explain">
                       {explaining ? (
@@ -209,10 +211,11 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
             )}
           </section>
 
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="mb-3 text-base font-semibold">All functions</h2>
+          <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-wrap gap-1">
               {CATEGORIES.map((c) => (
-                <Button key={c} variant={category === c ? "secondary" : "ghost"} size="sm" onClick={() => {
+                <Button key={c} variant={category === c ? "secondary" : "ghost"} size="sm" className="capitalize" onClick={() => {
                     setCategory(c);
                     setPage(0);
                   }}>
@@ -220,7 +223,7 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
                 </Button>
               ))}
             </div>
-            <div className="relative sm:w-64">
+            <div className="relative md:w-64">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input value={query} onChange={(e) => {
                   setQuery(e.target.value);
@@ -239,7 +242,7 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
                     type="button"
                     key={f.id}
                     onClick={() => setSelectedId(f.id)}
-                    className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-muted/50 ${selectedId === f.id ? "bg-accent" : ""}`}
+                    className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left sm:px-4 hover:bg-muted/50 ${selectedId === f.id ? "bg-accent" : ""}`}
                     data-testid={`function-row-${f.id}`}
                   >
                     <span className="min-w-0">
@@ -249,7 +252,7 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
                       </span>
                       <span className="block truncate font-mono text-[11px] text-muted-foreground">{f.file}</span>
                     </span>
-                    <span className="flex shrink-0 items-center gap-2">
+                    <span className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                       {!f.eligible && <span className="text-[11px] text-muted-foreground">Skipped</span>}
                       <Badge variant="outline">{f.category}</Badge>
                       <span className="w-10 text-right font-mono text-xs text-muted-foreground">{f.importance.toFixed(1)}</span>
