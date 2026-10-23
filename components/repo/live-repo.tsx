@@ -181,10 +181,10 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
             )}
             <div className={`mt-2 flex-wrap gap-3 text-[11px] text-muted-foreground ${view === "map" ? "flex" : "hidden"}`}>
               {[
-                ["entry", "#2563eb"],
-                ["core", "#059669"],
-                ["data", "#d97706"],
-                ["helper", "#6b7280"],
+                ["entry", "hsl(220 70% 50%)"],
+                ["core", "hsl(262 60% 55%)"],
+                ["data", "hsl(158 60% 40%)"],
+                ["helper", "hsl(38 80% 50%)"],
               ].map(([name, color]) => (
                 <span key={name} className="flex items-center gap-1">
                   <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: color }} />

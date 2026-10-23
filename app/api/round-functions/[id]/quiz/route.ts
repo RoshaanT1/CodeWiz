@@ -134,6 +134,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   // Rubrics go in quiz_answer_keys, which has no read policy for signed-in
   // users, so they can't be fetched through the database API before answering.
+  // Another request (for example one started before a page reload) may have
+  // saved a quiz while this one was waiting on the model: use that one.
+  const { data: raced } = await db.from("quiz_items").select(ITEM_COLUMNS).eq("round_function_id", roundFunctionId).eq("user_id", userId).order("id");
+  if (raced && raced.length > 0) {
+    const { data: fnNow } = await db.from("functions").select("explanation").eq("id", fn.id).maybeSingle<{ explanation: string | null }>();
+    return NextResponse.json({ ok: true as const, data: toQuizView(raced as QuizItemRow[], fnNow?.explanation ?? null) });
+  }
+
   const admin = createAdminClient();
   if (!admin.ok) return error("SERVER_CONFIG", admin.reason, 500);
   const questions = pack.questions.map((q) => ({ ...q, id: randomUUID() }));
