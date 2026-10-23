@@ -149,6 +149,9 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 - [ ] **QUIZ-3 Explanation reveal** (Core, Fizzah). Needs QUIZ-2
   - Show the plain-language explanation after the answers, labelled as AI-generated. Add an "Explain" button for functions outside the round.
   - Watch out: an explained function is left out of future quizzes, since the user has already seen the answer. Check the browser's network tab too: rubrics and the explanation must not arrive before the answers are submitted.
+- [x] **QUIZ-4 Answer mode and practice questions** (Core, Roshaan). Needs QUIZ-3
+  - Before the first question, the user picks multiple choice (easier) or written (deeper). The choice is locked for that function's quiz and suggested next time.
+  - After the explanation, "Practise with more questions" adds up to 3 new multiple-choice questions, 9 at most per function. They count toward the quiz score.
 
 ## 9. Bug drills
 
