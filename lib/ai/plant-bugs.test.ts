@@ -26,3 +26,12 @@ describe("makeParseCheck", () => {
     expect(await check("    def add(self, x, items=[]:\n        return items or [x]", "python")).toBe(false);
   });
 });
+
+describe("plantTokenBudget", () => {
+  it("keeps the floor for short functions and grows with long ones, capped", async () => {
+    const { plantTokenBudget } = await import("./plant-bugs");
+    expect(plantTokenBudget("x".repeat(300))).toBe(2000);
+    expect(plantTokenBudget("x".repeat(5200))).toBeGreaterThan(4000);
+    expect(plantTokenBudget("x".repeat(100000))).toBe(16000);
+  });
+});
