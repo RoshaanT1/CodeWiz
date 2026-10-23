@@ -11,6 +11,7 @@ import { GradeAnswerSchema } from "@/lib/ai/schemas/quiz-pack";
 import { requireApiAal2Session } from "@/lib/auth/session";
 import { checkAiCap } from "@/lib/server/daily-cap";
 import { toQuizView, type QuizItemRow } from "@/lib/quiz/quiz-view";
+import { gradeChoice } from "@/lib/quiz/grade-choice";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,15 +25,28 @@ function error(code: ErrorCode, message: string, status: number) {
 }
 
 const ParamsSchema = z.object({ id: z.uuid() });
-const BodySchema = z.object({ answer: z.string().max(3000, "Keep your answer under 3000 characters.") });
+// A written answer, or a multiple-choice pick (0 to 3).
+const BodySchema = z.object({
+  answer: z.string().max(3000, "Keep your answer under 3000 characters.").optional(),
+  choice: z.number().int().min(0).max(3).optional(),
+});
 
-const RubricSchema = z.object({ key_points: z.array(z.string()), full_credit: z.string(), partial_credit: z.string() });
+const RubricSchema = z.object({
+  key_points: z.array(z.string()),
+  full_credit: z.string(),
+  partial_credit: z.string(),
+  // Present on quizzes made after multiple choice was added.
+  correct_index: z.number().int().min(0).max(3).optional(),
+  why_correct: z.string().optional(),
+  best_practice: z.string().optional(),
+});
 
 const ItemSchema = z.object({
   id: z.string(),
   round_function_id: z.string(),
   question: z.string().nullable(),
   answer: z.string().nullable(),
+  options: z.array(z.string()).nullable().optional(),
   // Legacy rows kept the rubric here; new rows keep it in quiz_answer_keys.
   rubric: RubricSchema.nullable(),
   round_functions: z.object({
@@ -40,7 +54,7 @@ const ItemSchema = z.object({
   }),
 });
 
-const ITEM_COLUMNS = "id, kind, question, answer, score, feedback";
+const ITEM_COLUMNS = "id, kind, question, answer, score, feedback, options, correct_option, recommendation";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireApiAal2Session();
@@ -53,10 +67,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!parsedParams.success) return error("BAD_REQUEST", "That question id isn't valid.", 400);
 
   let answer: string;
+  let choice: number | undefined;
   try {
     const body = BodySchema.safeParse(await request.json());
-    if (!body.success) return error("BAD_REQUEST", body.error.issues[0]?.message ?? "Send { answer }.", 400);
-    answer = body.data.answer.trim();
+    if (!body.success) return error("BAD_REQUEST", body.error.issues[0]?.message ?? "Send { answer } or { choice }.", 400);
+    answer = (body.data.answer ?? "").trim();
+    choice = body.data.choice;
   } catch {
     return error("BAD_REQUEST", "Send your answer as JSON.", 400);
   }
@@ -67,7 +83,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: itemData, error: itemError } = await db
     .from("quiz_items")
-    .select("id, round_function_id, question, answer, rubric, round_functions(functions(id, code, start_line, explanation))")
+    .select("id, round_function_id, question, answer, options, rubric, round_functions(functions(id, code, start_line, explanation))")
     .eq("id", parsedParams.data.id)
     .eq("user_id", userId)
     .maybeSingle();
@@ -96,7 +112,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (item.data.answer === null) {
     let score = 0;
     let feedback = "No answer was given, so this question scores 0.";
-    if (answer) {
+    const options = item.data.options ?? null;
+    if (choice !== undefined) {
+      // Multiple choice: graded in code, no model call.
+      if (!options || rubric.correct_index === undefined) return error("BAD_REQUEST", "This question has no multiple-choice options. Answer it in writing.", 400);
+      const graded = gradeChoice(choice, rubric.correct_index, options, rubric.why_correct ?? "");
+      score = graded.score;
+      feedback = graded.feedback;
+      answer = options[choice] ?? "";
+    } else if (answer) {
       const cap = await checkAiCap(db, userId);
       if (!cap.ok) return error("RATE_LIMITED", cap.reason, 429);
 
@@ -116,7 +140,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     const { error: updateError } = await db
       .from("quiz_items")
-      .update({ answer, score, feedback })
+      .update({
+        answer,
+        score,
+        feedback,
+        // Revealed now that the question is answered.
+        correct_option: rubric.correct_index ?? null,
+        recommendation: rubric.best_practice ?? null,
+      })
       .eq("id", item.data.id)
       .eq("user_id", userId)
       .is("answer", null);

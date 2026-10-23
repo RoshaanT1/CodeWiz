@@ -27,6 +27,10 @@ export function buildQuizPackPrompt(input: QuizPackInput): { systemPrompt: strin
     "- Questions must be answerable from the code shown in a few sentences. No trivia about syntax.",
     "- rubric.key_points: 1 to 5 facts a good answer mentions. full_credit and partial_credit: one sentence each.",
     `- lines: the line range the question is about, between ${input.startLine} and ${endLine}.`,
+    "- options: the same question as multiple choice, exactly 4 different answers. One is correct; the other 3 are plausible mistakes a reader could make about this code (not silly). Put the correct one at a random position.",
+    "- correct_index: 0 to 3, the position of the correct option.",
+    "- why_correct: one or two sentences on why that option is right, pointing at the code.",
+    "- best_practice: one sentence on the industry-standard practice this question touches (for example how teams usually handle this kind of error, input or edge case), so the reader learns what good code does.",
     "",
     wrapUntrustedCode(input.code, input.startLine, { name: input.name, file: input.file, language: input.language }),
     input.callers.length
@@ -35,7 +39,7 @@ export function buildQuizPackPrompt(input: QuizPackInput): { systemPrompt: strin
     input.calleeNames.length ? `\nFunctions it calls: ${input.calleeNames.join(", ")}` : "",
     "",
     "Respond with JSON:",
-    '{ "explanation": "...", "questions": [ { "kind": "purpose", "question": "...", "rubric": { "key_points": ["..."], "full_credit": "...", "partial_credit": "..." }, "lines": { "start": 0, "end": 0 } } ] }',
+    '{ "explanation": "...", "questions": [ { "kind": "purpose", "question": "...", "rubric": { "key_points": ["..."], "full_credit": "...", "partial_credit": "..." }, "lines": { "start": 0, "end": 0 }, "options": ["...", "...", "...", "..."], "correct_index": 2, "why_correct": "...", "best_practice": "..." } ] }',
   ].join("\n");
 
   return { systemPrompt, prompt };

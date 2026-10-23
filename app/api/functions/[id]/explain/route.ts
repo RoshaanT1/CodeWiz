@@ -65,7 +65,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (!cap.ok) return error("RATE_LIMITED", cap.reason, 429);
 
     const calls = callCounter();
-    const llm = loggedLlm({ route: "explain", temperature: 0.4, maxTokens: 1800, onCall: calls.onCall });
+    const llm = loggedLlm({ route: "explain", temperature: 0.4, maxTokens: 3000, onCall: calls.onCall });
     const result = await llm({
       ...buildQuizPackPrompt({
         code: fn.data.code,
