@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, CircleX, Lightbulb, Loader2, RotateCcw } from "lucide-react";
+import { CheckCircle2, CircleX, ListChecks, Lightbulb, Loader2, PenLine, Plus, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,20 +12,41 @@ const KIND_LABEL = { purpose: "Purpose", behaviour: "Behaviour", edge_case: "Edg
 
 type Mode = "choice" | "written";
 
-const MODES: { id: Mode; label: string; hint: string }[] = [
-  { id: "choice", label: "Multiple choice", hint: "Quicker, and easier when you're starting out: pick one of four answers." },
-  { id: "written", label: "Written", hint: "Explain it in your own words. Harder, and builds deeper understanding." },
+const MODES: { id: Mode; label: string; tag: string; hint: string }[] = [
+  { id: "choice", label: "Multiple choice", tag: "Easier · good for beginners", hint: "Pick one of four answers. Quicker, and you see why the right one is right." },
+  { id: "written", label: "Written", tag: "Harder · deeper understanding", hint: "Explain it in your own words. The AI grades the meaning, not the wording." },
 ];
 
-const MODE_KEY = "codewiz:quiz-mode";
+/** The last mode picked, used as the suggested one next time. */
+const PREFERRED_KEY = "codewiz:quiz-mode";
+/** The mode locked in for one function's quiz. */
+const lockKey = (roundFunctionId: string) => `codewiz:quiz-mode:${roundFunctionId}`;
 
-function readMode(): Mode {
+function readStored(key: string): Mode | null {
   try {
-    return window.localStorage.getItem(MODE_KEY) === "written" ? "written" : "choice";
+    const value = window.localStorage.getItem(key);
+    return value === "choice" || value === "written" ? value : null;
   } catch {
-    return "choice";
+    return null;
   }
 }
+
+function store(key: string, mode: Mode) {
+  try {
+    window.localStorage.setItem(key, mode);
+  } catch {
+    // The choice just won't be remembered.
+  }
+}
+
+/** Questions already answered fix the mode, even if this browser forgot it. */
+function inferMode(items: QuizItemView[]): Mode | null {
+  const answered = items.find((item) => item.answer !== null && item.answer !== "");
+  if (!answered) return null;
+  return answered.options?.includes(answered.answer ?? "") ? "choice" : "written";
+}
+
+const MAX_QUESTIONS = 9;
 
 type Props = {
   roundFunctionId: string;
@@ -37,7 +58,11 @@ type Props = {
 export function QuizPanel({ roundFunctionId, onDone }: Props) {
   const [quiz, setQuiz] = useState<QuizView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>("choice");
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [preferred, setPreferred] = useState<Mode>("choice");
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [addingMore, setAddingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [picks, setPicks] = useState<Record<string, number>>({});
   const [missed, setMissed] = useState<Record<string, string[]>>({});
@@ -45,25 +70,42 @@ export function QuizPanel({ roundFunctionId, onDone }: Props) {
   const [answerError, setAnswerError] = useState<string | null>(null);
 
   useEffect(() => {
-    setMode(readMode());
+    setPreferred(readStored(PREFERRED_KEY) ?? "choice");
   }, []);
 
   function chooseMode(next: Mode) {
     setMode(next);
-    try {
-      window.localStorage.setItem(MODE_KEY, next);
-    } catch {
-      // The choice just won't be remembered.
-    }
+    store(lockKey(roundFunctionId), next);
+    store(PREFERRED_KEY, next);
   }
+
+  /** Shows a quiz; the explanation stays up once seen, even while practice questions are open. */
+  const show = useCallback((view: QuizView) => {
+    setQuiz(view);
+    if (view.explanation) setExplanation(view.explanation);
+  }, []);
 
   const load = useCallback(async () => {
     setLoadError(null);
     setQuiz(null);
     const res = await postOnce<QuizView>(`/api/round-functions/${roundFunctionId}/quiz`);
-    if (res.ok) setQuiz(res.data);
-    else setLoadError(res.message);
-  }, [roundFunctionId]);
+    if (!res.ok) {
+      setLoadError(res.message);
+      return;
+    }
+    show(res.data);
+    const hasChoices = res.data.items.some((item) => item.options !== null);
+    setMode(hasChoices ? (inferMode(res.data.items) ?? readStored(lockKey(roundFunctionId))) : "written");
+  }, [roundFunctionId, show]);
+
+  async function addMore() {
+    setAddingMore(true);
+    setMoreError(null);
+    const res = await postJson<QuizView>(`/api/round-functions/${roundFunctionId}/quiz/more`);
+    setAddingMore(false);
+    if (res.ok) show(res.data);
+    else setMoreError(res.message);
+  }
 
   useEffect(() => {
     void load();
@@ -81,7 +123,7 @@ export function QuizPanel({ roundFunctionId, onDone }: Props) {
       setAnswerError(res.message);
       return;
     }
-    setQuiz({ items: res.data.items, explanation: res.data.explanation });
+    show({ items: res.data.items, explanation: res.data.explanation });
     setMissed((old) => ({ ...old, [item.id]: res.data.missedPoints }));
   }
 
@@ -107,31 +149,46 @@ export function QuizPanel({ roundFunctionId, onDone }: Props) {
   }
 
   const nextOpen = quiz.items.find((item) => item.answer === null)?.id;
-  const anyChoices = quiz.items.some((item) => item.options !== null);
-  const activeHint = MODES.find((m) => m.id === mode)?.hint;
-  return (
-    <div className="space-y-4" data-testid="quiz-panel">
-      {anyChoices && nextOpen && (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="inline-flex rounded-md border bg-card p-1" role="radiogroup" aria-label="How do you want to answer?">
-            {MODES.map((m) => (
+
+  if (mode === null) {
+    return (
+      <div className="rounded-md border bg-card p-5" data-testid="quiz-mode-chooser">
+        <h2 className="text-sm font-semibold">How do you want to answer?</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {quiz.items.length} questions about this function. Your choice applies to the whole quiz.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="How do you want to answer?">
+          {MODES.map((m) => {
+            const Icon = m.id === "choice" ? ListChecks : PenLine;
+            return (
               <button
                 key={m.id}
                 type="button"
                 role="radio"
-                aria-checked={mode === m.id}
-                title={m.hint}
+                aria-checked={preferred === m.id}
                 onClick={() => chooseMode(m.id)}
-                className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${mode === m.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                className={`flex flex-col items-start gap-1.5 rounded-md border p-4 text-left transition-colors hover:border-primary hover:bg-primary/5 ${preferred === m.id ? "border-primary/60" : ""}`}
                 data-testid={`quiz-mode-${m.id}`}
               >
-                {m.label}
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <Icon size={16} className="text-primary" /> {m.label}
+                </span>
+                <span className="text-[11px] font-medium text-primary">{m.tag}</span>
+                <span className="text-xs leading-5 text-muted-foreground">{m.hint}</span>
               </button>
-            ))}
-          </div>
-          <p className="text-[11px] text-muted-foreground">{activeHint}</p>
+            );
+          })}
         </div>
-      )}
+      </div>
+    );
+  }
+
+  const asked = quiz.items.length;
+  return (
+    <div className="space-y-4" data-testid="quiz-panel">
+      <p className="text-xs text-muted-foreground" data-testid="quiz-mode-label">
+        Answering as <span className="font-medium text-foreground">{mode === "choice" ? "multiple choice" : "written answers"}</span>
+      </p>
 
       {quiz.items.map((item, i) => {
         const asChoice = mode === "choice" && item.options !== null;
@@ -205,13 +262,33 @@ export function QuizPanel({ roundFunctionId, onDone }: Props) {
           {answerError}
         </p>
       )}
-      {quiz.explanation && (
+      {explanation && (
         <div className="rounded-md border border-primary/30 bg-card p-4" data-testid="quiz-explanation">
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Explanation · AI-generated</div>
-          <p className="text-sm leading-6">{quiz.explanation}</p>
-          <Button className="mt-3" onClick={onDone} data-testid="button-quiz-continue">
-            Continue to the bug drill
-          </Button>
+          <p className="text-sm leading-6">{explanation}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button onClick={onDone} data-testid="button-quiz-continue">
+              Continue to the bug drill
+            </Button>
+            {!nextOpen && asked < MAX_QUESTIONS && (
+              <Button variant="outline" onClick={() => void addMore()} disabled={addingMore} data-testid="button-quiz-more">
+                {addingMore ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" /> Writing more questions…
+                  </>
+                ) : (
+                  <>
+                    <Plus size={14} /> Practise with more questions
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+          {moreError && (
+            <p className="mt-2 text-xs text-destructive" role="alert">
+              {moreError}
+            </p>
+          )}
         </div>
       )}
     </div>
