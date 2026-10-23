@@ -1,127 +1,123 @@
 import { describe, expect, it } from "vitest";
-import { verifyPackage } from "./index";
 
-describe("verifyPackage (Gig 5: Package Registry Verifier)", () => {
-  it("verifies real npm package and detects function presence", async () => {
-    const mockFetch: typeof fetch = async (url) => {
-      if (String(url).includes("lodash")) {
-        return new Response(
-          JSON.stringify({
-            description: "Lodash modular utilities.",
-            readme: "The Lodash library exported as Node.js modules. Features debounce, throttle, etc.",
-            homepage: "https://lodash.com/",
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      return new Response(null, { status: 404 });
-    };
+import { mentionsFunction, verifyPackage } from "./index";
 
-    const success = await verifyPackage({
+/** A fake fetch that serves fixed responses by URL. Unknown URLs are 404. */
+function fakeFetch(routes: Record<string, { status?: number; json?: unknown; text?: string }>): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const route = routes[url];
+    if (!route) return new Response("not found", { status: 404 });
+    const body = route.json !== undefined ? JSON.stringify(route.json) : (route.text ?? "");
+    return new Response(body, { status: route.status ?? 200 });
+  }) as typeof fetch;
+}
+
+const LODASH = {
+  "dist-tags": { latest: "4.17.21" },
+  description: "Lodash modular utilities.",
+  readme: "## Usage\n\n_.debounce(func, [wait=0])\n_.throttle(func)",
+  homepage: "https://lodash.com/",
+};
+
+describe("verifyPackage", () => {
+  it("verifies a real npm package whose README mentions the function", async () => {
+    const result = await verifyPackage({
       ecosystem: "npm",
       package: "lodash",
       functionName: "debounce",
-      fetchFn: mockFetch,
+      fetch: fakeFetch({ "https://registry.npmjs.org/lodash": { json: LODASH } }),
     });
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        ecosystem: "npm",
+        package: "lodash",
+        functionName: "debounce",
+        exists: true,
+        functionFound: true,
+        foundIn: "readme",
+        verified: true,
+        docsUrl: "https://lodash.com/",
+      },
+    });
+  });
 
-    expect(success.exists).toBe(true);
-    expect(success.mentionedInDocs).toBe(true);
-    expect(success.docsUrl).toBe("https://lodash.com/");
+  it("rejects a made-up npm package", async () => {
+    const result = await verifyPackage({ ecosystem: "npm", package: "super-debounce-ai-xyz", functionName: "debounce", fetch: fakeFetch({}) });
+    expect(result).toMatchObject({ ok: true, data: { exists: false, verified: false, docsUrl: null } });
+  });
 
-    // Function not in readme
-    const missingFn = await verifyPackage({
+  it("rejects a real package that doesn't mention the function", async () => {
+    const result = await verifyPackage({
       ecosystem: "npm",
       package: "lodash",
-      functionName: "nonExistentHelperXYZ",
-      fetchFn: mockFetch,
+      functionName: "smartRetry",
+      fetch: fakeFetch({ "https://registry.npmjs.org/lodash": { json: LODASH } }),
     });
-
-    expect(missingFn.exists).toBe(true);
-    expect(missingFn.mentionedInDocs).toBe(false);
+    expect(result).toMatchObject({ ok: true, data: { exists: true, functionFound: false, verified: false } });
   });
 
-  it("rejects non-existent npm package", async () => {
-    const mockFetch: typeof fetch = async () => new Response(null, { status: 404 });
-
-    const res = await verifyPackage({
+  it("encodes scoped npm names", async () => {
+    const result = await verifyPackage({
       ecosystem: "npm",
-      package: "fake-made-up-package-12345",
-      functionName: "debounce",
-      fetchFn: mockFetch,
+      package: "@scope/pkg",
+      functionName: "run",
+      fetch: fakeFetch({ "https://registry.npmjs.org/@scope%2Fpkg": { json: { description: "Call run() to start." } } }),
     });
-
-    expect(res.exists).toBe(false);
-    expect(res.mentionedInDocs).toBe(false);
-    expect(res.reason).toContain("not found on npm");
+    expect(result).toMatchObject({ ok: true, data: { verified: true, foundIn: "description", docsUrl: "https://www.npmjs.com/package/@scope/pkg" } });
   });
 
-  it("verifies real PyPI package and rejects fake ones", async () => {
-    const mockFetch: typeof fetch = async (url) => {
-      if (String(url).includes("requests")) {
-        return new Response(
-          JSON.stringify({
+  it("verifies PyPI packages and prefers the Documentation link", async () => {
+    const result = await verifyPackage({
+      ecosystem: "pypi",
+      package: "tenacity",
+      functionName: "retry",
+      fetch: fakeFetch({
+        "https://pypi.org/pypi/tenacity/json": {
+          json: {
             info: {
-              summary: "Python HTTP for Humans.",
-              description: "Provides requests.get and requests.post methods.",
-              project_urls: { Documentation: "https://requests.readthedocs.io" },
+              summary: "Retry code until it succeeds",
+              description: "Use the @retry decorator.",
+              project_urls: { Documentation: "https://tenacity.readthedocs.io/" },
             },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      return new Response(null, { status: 404 });
-    };
-
-    const res = await verifyPackage({
-      ecosystem: "pypi",
-      package: "requests",
-      functionName: "get",
-      fetchFn: mockFetch,
+          },
+        },
+      }),
     });
-
-    expect(res.exists).toBe(true);
-    expect(res.mentionedInDocs).toBe(true);
-    expect(res.docsUrl).toBe("https://requests.readthedocs.io");
-
-    const fake = await verifyPackage({
-      ecosystem: "pypi",
-      package: "nonexistent-fake-pypi-lib-999",
-      functionName: "get",
-      fetchFn: mockFetch,
-    });
-
-    expect(fake.exists).toBe(false);
-    expect(fake.mentionedInDocs).toBe(false);
+    expect(result).toMatchObject({ ok: true, data: { verified: true, foundIn: "readme", docsUrl: "https://tenacity.readthedocs.io/" } });
   });
 
-  it("verifies Python standard library module from static catalogue", async () => {
-    const mockFetch: typeof fetch = async (url) => {
-      if (String(url).includes("collections")) {
-        return new Response("<html><body>defaultdict and deque objects</body></html>", {
-          status: 200,
-        });
-      }
-      return new Response(null, { status: 404 });
-    };
-
-    const res = await verifyPackage({
-      ecosystem: "python_stdlib",
-      package: "collections",
-      functionName: "defaultdict",
-      fetchFn: mockFetch,
+  it("checks stdlib modules against the list and their docs page", async () => {
+    const fetchFn = fakeFetch({
+      "https://docs.python.org/3/library/functools.html": { text: "<dt id=\"functools.lru_cache\">@functools.lru_cache</dt>" },
     });
-
-    expect(res.exists).toBe(true);
-    expect(res.mentionedInDocs).toBe(true);
-    expect(res.docsUrl).toBe("https://docs.python.org/3/library/collections.html");
-
-    const fakeStdlib = await verifyPackage({
-      ecosystem: "python_stdlib",
-      package: "expressjs",
-      functionName: "Router",
+    expect(await verifyPackage({ ecosystem: "python_stdlib", package: "functools", functionName: "lru_cache", fetch: fetchFn })).toMatchObject({
+      ok: true,
+      data: { verified: true, foundIn: "docs", docsUrl: "https://docs.python.org/3/library/functools.html" },
     });
+    expect(await verifyPackage({ ecosystem: "python_stdlib", package: "fancytools", functionName: "memo", fetch: fetchFn })).toMatchObject({
+      ok: true,
+      data: { exists: false, verified: false },
+    });
+  });
 
-    expect(fakeStdlib.exists).toBe(false);
-    expect(fakeStdlib.reason).toContain("not a Python standard library module");
+  it("returns ok: false on network errors and bad names instead of throwing", async () => {
+    const failing = (async () => {
+      throw new TypeError("network down");
+    }) as typeof fetch;
+    expect(await verifyPackage({ ecosystem: "pypi", package: "requests", functionName: "get", fetch: failing })).toEqual({
+      ok: false,
+      reason: "Couldn't reach pypi.org",
+    });
+    expect(await verifyPackage({ ecosystem: "npm", package: "../etc", functionName: "x", fetch: failing })).toMatchObject({ ok: false });
+    expect(await verifyPackage({ ecosystem: "npm", package: "lodash", functionName: "a b", fetch: failing })).toMatchObject({ ok: false });
+  });
+});
+
+describe("mentionsFunction", () => {
+  it("matches whole words only, using the last dotted part", () => {
+    expect(mentionsFunction("use _.debounce(fn)", "lodash.debounce")).toBe(true);
+    expect(mentionsFunction("debounced values", "debounce")).toBe(false);
   });
 });

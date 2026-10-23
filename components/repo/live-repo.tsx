@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { EmptyState, PageTitle, SectionTitle } from "@/components/app-shell/page-parts";
 import { CallMap, type Category } from "@/components/call-map";
 import { MetricsPanel } from "@/components/metrics/metrics-panel";
+import { RepoGraphWorkspace, transformRepoToGraph } from "@/components/repo-graph";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,28 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
   const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
   const selected = functions.find((f) => f.id === selectedId);
+  const [view, setView] = useState<"map" | "graph">("map");
+  const repoGraph = useMemo(
+    () =>
+      transformRepoToGraph(
+        { id: repo.id, owner: repo.owner, name: repo.name, status: repo.status },
+        repo.functions.map((f) => ({
+          id: f.id,
+          name: f.name,
+          qualifiedName: f.name,
+          filePath: f.file,
+          category: f.category as Category,
+          importance: f.importance,
+          callers: f.metrics.callers,
+          callees: f.metrics.callees,
+          branches: f.metrics.branches,
+          dataAccess: f.metrics.dataAccess,
+          explained: !f.eligible,
+        })),
+        repo.calls,
+      ),
+    [repo],
+  );
 
   async function explain() {
     if (!selected) return;
@@ -114,11 +137,49 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
           </section>
 
           <section className="mb-7">
-            <SectionTitle aside={<span className="text-xs text-muted-foreground">Click a function to move the map</span>}>Call map</SectionTitle>
-            <div className="h-[360px] overflow-hidden rounded-md border bg-card">
-              <CallMap functions={mapFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} maxNodes={6} />
-            </div>
-            <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+            <SectionTitle
+              aside={
+                <div className="flex gap-1" role="tablist" aria-label="Map view">
+                  {(
+                    [
+                      ["map", "Call map"],
+                      ["graph", "Repo graph"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <Button
+                      key={key}
+                      size="sm"
+                      variant={view === key ? "secondary" : "ghost"}
+                      role="tab"
+                      aria-selected={view === key}
+                      onClick={() => setView(key)}
+                      data-testid={`tab-${key}`}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              }
+            >
+              {view === "map" ? "Call map" : "Repository graph"}
+            </SectionTitle>
+            {view === "map" ? (
+              <div className="h-[360px] overflow-hidden rounded-md border bg-card">
+                <CallMap functions={mapFunctions} calls={repo.calls} selectedId={selectedId} onSelect={setSelectedId} maxNodes={6} />
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-md border bg-card" data-testid="repo-graph">
+                <RepoGraphWorkspace
+                  graph={repoGraph}
+                  status="ready"
+                  onStartRoundWithFunction={(fnId) => {
+                    setSelectedId(fnId);
+                    setView("map");
+                  }}
+                />
+              </div>
+            )}
+            <div className={`mt-2 flex-wrap gap-3 text-[11px] text-muted-foreground ${view === "map" ? "flex" : "hidden"}`}>
               {[
                 ["entry", "#2563eb"],
                 ["core", "#059669"],

@@ -1,124 +1,166 @@
-import { NextResponse } from "next/server";
+// POST /api/round-functions/[id]/quiz: generates the quiz pack (AI step B)
+// once, stores questions, rubrics and the explanation, and returns only the
+// questions. The explanation is returned after every question is answered.
+import { randomUUID } from "node:crypto";
 
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import { callCounter, loggedLlm } from "@/lib/ai/logged-llm";
+import { buildQuizPackPrompt } from "@/lib/ai/prompts/quiz-pack";
+import { recordAiCalls } from "@/lib/ai/record-usage";
+import { QuizPackSchema, type QuizPack } from "@/lib/ai/schemas/quiz-pack";
 import { requireApiAal2Session } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { checkAiCap } from "@/lib/server/daily-cap";
+import { toQuizView, type QuizItemRow } from "@/lib/quiz/quiz-view";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generateQuizPack } from "@/lib/quiz";
-import { apiError } from "@/lib/server/responses";
-import { getAiConfig } from "@/lib/ai/user-config";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-/**
- * POST /api/round-functions/[id]/quiz
- * QUIZ-1: Generate quiz pack (questions, rubrics, explanation) for a round function.
- * Rubrics and explanation are stored but NOT returned — only question text and kind.
- */
-export async function POST(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+type ErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "BAD_REQUEST" | "NOT_FOUND" | "SERVER_CONFIG" | "UPSTREAM" | "RATE_LIMITED";
+
+function error(code: ErrorCode, message: string, status: number) {
+  return NextResponse.json({ ok: false as const, error: { code, message } }, { status });
+}
+
+const ParamsSchema = z.object({ id: z.uuid() });
+
+const RoundFunctionSchema = z.object({
+  id: z.string(),
+  functions: z.object({
+    id: z.string(),
+    name: z.string(),
+    qualified_name: z.string().nullable(),
+    file_path: z.string(),
+    code: z.string(),
+    language: z.string().nullable(),
+    start_line: z.number().int().positive(),
+    end_line: z.number().int().positive(),
+    explanation: z.string().nullable(),
+  }),
+});
+
+const ITEM_COLUMNS = "id, kind, question, answer, score, feedback";
+const MAX_CALLER_LINES = 15;
+
+export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireApiAal2Session();
   if (!session.ok) {
-    return apiError(session.status === 401 ? "UNAUTHORIZED" : "FORBIDDEN", session.reason, session.status);
+    return error(session.status === 401 ? "UNAUTHORIZED" : session.status === 403 ? "FORBIDDEN" : "UPSTREAM", session.reason, session.status);
   }
   const userId = session.data.id;
-  const { id: rfId } = await params;
+
+  const parsedParams = ParamsSchema.safeParse(await params);
+  if (!parsedParams.success) return error("BAD_REQUEST", "That round function id isn't valid.", 400);
+  const roundFunctionId = parsedParams.data.id;
 
   const client = await createClient();
-  if (!client.ok) return apiError("UPSTREAM", client.reason, 503);
+  if (!client.ok) return error("SERVER_CONFIG", client.reason, 500);
+  const db = client.data;
 
-  // Verify ownership and load the function.
-  const { data: rf } = await client.data
+  const { data: rfData, error: rfError } = await db
     .from("round_functions")
-    .select("id, function_id, status, round_id")
-    .eq("id", rfId).eq("user_id", userId).single();
-  if (!rf) return apiError("NOT_FOUND", "Round function not found.", 404);
-
-  // Check if quiz already generated.
-  const { data: existing } = await client.data
-    .from("quiz_items").select("id, kind, question").eq("round_function_id", rfId).eq("user_id", userId);
-  if (existing && existing.length > 0) {
-    return NextResponse.json({ ok: true, data: { questions: existing, cached: true } });
-  }
-
-  const { data: fn } = await client.data
-    .from("functions")
-    .select("name, file_path, language, code, start_line, qualified_name")
-    .eq("id", rf.function_id).eq("user_id", userId).single();
-  if (!fn) return apiError("NOT_FOUND", "Function not found.", 404);
-
-  // Load up to 3 caller snippets.
-  const { data: callerEdges } = await client.data
-    .from("function_calls")
-    .select("caller_id")
-    .eq("callee_id", rf.function_id)
+    .select("id, functions(id, name, qualified_name, file_path, code, language, start_line, end_line, explanation)")
+    .eq("id", roundFunctionId)
     .eq("user_id", userId)
-    .limit(3);
+    .maybeSingle();
+  if (rfError) return error("UPSTREAM", "Couldn't load this function. Try again.", 502);
+  if (!rfData) return error("NOT_FOUND", "We couldn't find that function in your rounds.", 404);
+  const parsed = RoundFunctionSchema.safeParse(rfData);
+  if (!parsed.success) return error("UPSTREAM", "This function's stored code is incomplete.", 502);
+  const fn = parsed.data.functions;
 
-  let callerSnippets: string[] = [];
-  if (callerEdges && callerEdges.length > 0) {
-    const callerIds = callerEdges.map((e) => e.caller_id);
-    const { data: callers } = await client.data
-      .from("functions").select("name, code, start_line").in("id", callerIds);
-    callerSnippets = (callers ?? []).map((c) => `// ${c.name}\n${(c.code ?? "").slice(0, 400)}`);
+  const { data: existing, error: existingError } = await db
+    .from("quiz_items")
+    .select(ITEM_COLUMNS)
+    .eq("round_function_id", roundFunctionId)
+    .eq("user_id", userId)
+    .order("id");
+  if (existingError) return error("UPSTREAM", "Couldn't load the quiz. Try again.", 502);
+  if (existing && existing.length > 0) {
+    return NextResponse.json({ ok: true as const, data: toQuizView(existing as QuizItemRow[], fn.explanation) });
   }
 
-  const aiConfig = await getAiConfig();
-  const result = await generateQuizPack({
-    functionName: fn.name,
-    filePath: fn.file_path,
-    language: fn.language ?? "typescript",
-    code: fn.code ?? "",
-    startLine: fn.start_line ?? 1,
-    callerSnippets,
-    apiKey: aiConfig.apiKey,
-    provider: aiConfig.provider,
+  // Context: up to 3 callers (first lines only) and the callee names.
+  const [callerLinks, calleeLinks] = await Promise.all([
+    db.from("function_calls").select("functions!function_calls_caller_id_fkey(name, code, start_line)").eq("user_id", userId).eq("callee_id", fn.id).limit(3),
+    db.from("function_calls").select("functions!function_calls_callee_id_fkey(name)").eq("user_id", userId).eq("caller_id", fn.id).limit(15),
+  ]);
+  const CallerRows = z.array(z.object({ functions: z.object({ name: z.string(), code: z.string().nullable(), start_line: z.number().nullable() }).nullable() }));
+  const CalleeRows = z.array(z.object({ functions: z.object({ name: z.string() }).nullable() }));
+  const callers = (CallerRows.safeParse(callerLinks.data ?? []).data ?? []).flatMap((row) =>
+    row.functions?.code
+      ? [{ name: row.functions.name, code: row.functions.code.split("\n").slice(0, MAX_CALLER_LINES).join("\n"), startLine: row.functions.start_line ?? 1 }]
+      : [],
+  );
+  const calleeNames = (CalleeRows.safeParse(calleeLinks.data ?? []).data ?? []).flatMap((row) => (row.functions ? [row.functions.name] : []));
+
+  const cap = await checkAiCap(db, userId);
+  if (!cap.ok) return error("RATE_LIMITED", cap.reason, 429);
+
+  const calls = callCounter();
+  const llm = loggedLlm({ route: "quiz", temperature: 0.5, maxTokens: 1800, onCall: calls.onCall });
+  const { systemPrompt, prompt } = buildQuizPackPrompt({
+    code: fn.code,
+    startLine: fn.start_line,
+    language: fn.language ?? "javascript",
+    name: fn.qualified_name ?? fn.name,
+    file: fn.file_path,
+    callers,
+    calleeNames,
   });
 
-  if (!result.ok) return apiError("AI_ERROR", result.reason, 502);
-
-  // Store explanation on the function row.
-  await client.data
-    .from("functions")
-    .update({ explanation: result.data.explanation })
-    .eq("id", rf.function_id);
-
-  // Store quiz items in client-accessible table WITHOUT rubrics to protect confidentiality.
-  const quizRows = result.data.questions.map((q) => ({
-    user_id: userId,
-    round_function_id: rfId,
-    kind: q.kind,
-    question: q.question,
-  }));
-
-  const { data: inserted, error: insertErr } = await client.data
-    .from("quiz_items").insert(quizRows).select("id, kind, question");
-
-  if (insertErr || !inserted) {
-    return apiError("UPSTREAM", "Failed to store quiz items.", 500);
+  // The schema retry lives in callJson; this loop retries once when the
+  // line ranges fall outside the function.
+  let pack: QuizPack | null = null;
+  let issue = "";
+  for (let attempt = 0; attempt < 2 && !pack; attempt++) {
+    const result = await llm({ systemPrompt, prompt: issue ? `${prompt}\n\nYour last answer had a problem: ${issue}` : prompt, schema: QuizPackSchema });
+    if (!result.ok) {
+      issue = result.reason;
+      continue;
+    }
+    const bad = result.data.questions.find((q) => q.lines.start < fn.start_line || q.lines.end > fn.end_line || q.lines.start > q.lines.end);
+    if (bad) {
+      issue = `lines must be between ${fn.start_line} and ${fn.end_line}.`;
+      continue;
+    }
+    pack = result.data;
   }
+  await recordAiCalls(db, userId, calls.count);
+  if (!pack) return error("UPSTREAM", "We couldn't write questions for this function. Try again.", 502);
 
-  // Store rubrics in server-only quiz_answer_keys table (zero RLS read policy for client).
+  // Rubrics go in quiz_answer_keys, which has no read policy for signed-in
+  // users, so they can't be fetched through the database API before answering.
   const admin = createAdminClient();
-  if (admin.ok) {
-    const keyRows = inserted.map((item, idx) => ({
-      quiz_item_id: item.id,
-      user_id: userId,
-      rubric: result.data.questions[idx]?.rubric ?? {},
-    }));
-    await admin.data.from("quiz_answer_keys").insert(keyRows);
+  if (!admin.ok) return error("SERVER_CONFIG", admin.reason, 500);
+  const questions = pack.questions.map((q) => ({ ...q, id: randomUUID() }));
+  const { data: inserted, error: insertError } = await db
+    .from("quiz_items")
+    .insert(questions.map((q) => ({ id: q.id, user_id: userId, round_function_id: roundFunctionId, kind: q.kind, question: q.question, rubric: null })))
+    .select(ITEM_COLUMNS);
+  if (insertError || !inserted) {
+    console.warn(`[quiz] quiz_items insert failed: ${insertError?.message}`);
+    return error("UPSTREAM", "Couldn't save the quiz. Try again.", 502);
   }
+  const { error: keyError } = await admin.data
+    .from("quiz_answer_keys")
+    .insert(questions.map((q) => ({ quiz_item_id: q.id, user_id: userId, rubric: { ...q.rubric, lines: q.lines } })));
+  if (keyError) {
+    // Until migration 20250101000300 is applied the table doesn't exist, so
+    // keep the rubric on quiz_items as before rather than failing the quiz.
+    console.warn(`[quiz] quiz_answer_keys insert failed (${keyError.code}): ${keyError.message}; storing rubrics on quiz_items`);
+    const fallbacks = await Promise.all(
+      questions.map((q) => db.from("quiz_items").update({ rubric: { ...q.rubric, lines: q.lines } }).eq("id", q.id).eq("user_id", userId)),
+    );
+    if (fallbacks.some((r) => r.error)) {
+      await db.from("quiz_items").delete().in("id", questions.map((q) => q.id)).eq("user_id", userId);
+      return error("UPSTREAM", "Couldn't save the quiz. Try again.", 502);
+    }
+  }
+  await db.from("functions").update({ explanation: pack.explanation }).eq("id", fn.id).eq("user_id", userId);
 
-  // Update round function status.
-  await client.data.from("round_functions").update({ status: "quiz_ready" }).eq("id", rfId);
-
-  // Return ONLY question text and kind — NOT the rubric or explanation.
-  return NextResponse.json({
-    ok: true,
-    data: {
-      questions: (inserted ?? []).map((q) => ({ id: q.id, kind: q.kind, question: q.question })),
-    },
-  }, { status: 201 });
+  return NextResponse.json({ ok: true as const, data: toQuizView(inserted as QuizItemRow[], pack.explanation) });
 }
