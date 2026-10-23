@@ -3,14 +3,16 @@ import { CheckCircle2, CircleAlert, CircleX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { DrillResult, FindingOutcome } from "@/lib/grading/drill-result";
 
+import { BugTutor } from "./bug-tutor";
+
 const OUTCOME: Record<FindingOutcome, { label: string; className: string }> = {
   caught: { label: "Caught", className: "text-emerald-700 dark:text-emerald-300" },
   false_alarm: { label: "False alarm", className: "text-muted-foreground" },
   possible_real_bug: { label: "Possible real bug", className: "text-amber-700 dark:text-amber-300" },
 };
 
-/** GRADE-4: each planted bug next to its original, plus how each flag was graded. */
-export function DrillResults({ result }: { result: DrillResult }) {
+/** GRADE-4: each planted bug next to its original, plus how each flag was graded. With a drill id, each bug offers the tutor. */
+export function DrillResults({ result, drillId }: { result: DrillResult; drillId?: string }) {
   const caught = result.bugs.filter((b) => b.caught).length;
   return (
     <div className="space-y-6" data-testid="drill-results">
@@ -64,6 +66,11 @@ export function DrillResults({ result }: { result: DrillResult }) {
                     </p>
                   </div>
                 </div>
+                {drillId && (
+                  <div className="border-t bg-muted/30 px-4 py-3">
+                    <BugTutor drillId={drillId} lineStart={bug.lineStart} missed={!bug.caught} />
+                  </div>
+                )}
               </article>
             ))}
           </div>

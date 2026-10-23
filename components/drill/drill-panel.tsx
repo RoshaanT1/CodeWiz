@@ -1,6 +1,6 @@
 "use client";
 
-import { Flag, Loader2, RotateCcw, X } from "lucide-react";
+import { Flag, LifeBuoy, Loader2, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +66,7 @@ export function DrillPanel({ roundFunctionId, onDone }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<DrillResult | null>(null);
+  const [confirmGiveUp, setConfirmGiveUp] = useState(false);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -176,7 +177,7 @@ export function DrillPanel({ roundFunctionId, onDone }: Props) {
     );
   }
 
-  if (result) return <DrillResults result={result} />;
+  if (result) return <DrillResults result={result} drillId={drill.drillId} />;
 
   const lines = drill.code.split("\n");
   return (
@@ -274,6 +275,31 @@ export function DrillPanel({ roundFunctionId, onDone }: Props) {
             "Submit drill"
           )}
         </Button>
+
+        <div className="rounded-md border border-dashed p-3 text-xs" data-testid="drill-stuck">
+          {confirmGiveUp ? (
+            <>
+              <p className="leading-5">
+                {flags.length > 0
+                  ? `This submits your ${flags.length} flag${flags.length === 1 ? "" : "s"} as they are and shows every bug. Bugs you didn't flag count as missed.`
+                  : "This shows every bug, and they count as missed."}{" "}
+                Then the tutor can explain each one until it clicks.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" onClick={() => void submit()} disabled={submitting} data-testid="button-confirm-give-up">
+                  Show me the bugs
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirmGiveUp(false)} disabled={submitting}>
+                  Keep looking
+                </Button>
+              </div>
+            </>
+          ) : (
+            <button type="button" onClick={() => setConfirmGiveUp(true)} className="flex items-center gap-2 text-muted-foreground hover:text-foreground" data-testid="button-give-up">
+              <LifeBuoy size={14} /> Stuck? Show me the bugs and explain them
+            </button>
+          )}
+        </div>
       </aside>
     </div>
   );
