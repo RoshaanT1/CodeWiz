@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, Search } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -15,12 +15,14 @@ import type { RepoDetail } from "@/lib/quiz/load-workspace";
 
 const CATEGORIES = ["all", "entry", "core", "data", "helper"] as const;
 const SIZES = [3, 5, 10] as const;
+const PAGE_SIZE = 25;
 
 /** MAP-1: browse a repo's functions and start a round. */
 export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; showMetrics?: boolean }) {
   const router = useRouter();
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("all");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
   const [size, setSize] = useState<(typeof SIZES)[number]>(3);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +63,10 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
       ),
     [functions, category, query],
   );
+  const pageCount = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  // A filter can shrink the list below the current page: show its last page.
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageRows = shown.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
   const eligible = functions.filter((f) => f.eligible && !f.reviewed).length;
 
   async function start() {
@@ -206,44 +212,70 @@ export function LiveRepo({ repo, showMetrics = false }: { repo: RepoDetail; show
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-1">
               {CATEGORIES.map((c) => (
-                <Button key={c} variant={category === c ? "secondary" : "ghost"} size="sm" onClick={() => setCategory(c)}>
+                <Button key={c} variant={category === c ? "secondary" : "ghost"} size="sm" onClick={() => {
+                    setCategory(c);
+                    setPage(0);
+                  }}>
                   {c === "all" ? "All" : c}
                 </Button>
               ))}
             </div>
             <div className="relative sm:w-64">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search functions" className="pl-8" aria-label="Search functions" />
+              <Input value={query} onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(0);
+                }} placeholder="Search functions" className="pl-8" aria-label="Search functions" />
             </div>
           </div>
 
           {shown.length === 0 ? (
             <EmptyState title="No matching functions" text="Try another category or search." />
           ) : (
-            <div className="divide-y overflow-hidden rounded-md border bg-card">
-              {shown.slice(0, 200).map((f) => (
-                <button
-                  type="button"
-                  key={f.id}
-                  onClick={() => setSelectedId(f.id)}
-                  className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-muted/50 ${selectedId === f.id ? "bg-accent" : ""}`}
-                  data-testid={`function-row-${f.id}`}
-                >
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-2 text-sm font-medium">
-                      <span className="truncate">{f.name}</span>
-                      {f.reviewed && <CheckCircle2 size={13} className="shrink-0 text-emerald-600" aria-label="Reviewed" />}
+            <>
+              <div className="divide-y overflow-hidden rounded-md border bg-card" data-testid="function-list">
+                {pageRows.map((f) => (
+                  <button
+                    type="button"
+                    key={f.id}
+                    onClick={() => setSelectedId(f.id)}
+                    className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-muted/50 ${selectedId === f.id ? "bg-accent" : ""}`}
+                    data-testid={`function-row-${f.id}`}
+                  >
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2 text-sm font-medium">
+                        <span className="truncate">{f.name}</span>
+                        {f.reviewed && <CheckCircle2 size={13} className="shrink-0 text-emerald-600" aria-label="Reviewed" />}
+                      </span>
+                      <span className="block truncate font-mono text-[11px] text-muted-foreground">{f.file}</span>
                     </span>
-                    <span className="block truncate font-mono text-[11px] text-muted-foreground">{f.file}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      {!f.eligible && <span className="text-[11px] text-muted-foreground">Skipped</span>}
+                      <Badge variant="outline">{f.category}</Badge>
+                      <span className="w-10 text-right font-mono text-xs text-muted-foreground">{f.importance.toFixed(1)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {pageCount > 1 && (
+                <nav className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground" aria-label="Function list pages">
+                  <span data-testid="function-page-range">
+                    {currentPage * PAGE_SIZE + 1}–{Math.min(shown.length, (currentPage + 1) * PAGE_SIZE)} of {shown.length}
                   </span>
-                  <span className="flex shrink-0 items-center gap-2">
-                    {!f.eligible && <span className="text-[11px] text-muted-foreground">Skipped</span>}
-                    <Badge variant="outline">{f.category}</Badge>
-                    <span className="w-10 text-right font-mono text-xs text-muted-foreground">{f.importance.toFixed(1)}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="sm" onClick={() => setPage(currentPage - 1)} disabled={currentPage === 0} aria-label="Previous page" data-testid="button-page-prev">
+                      <ChevronLeft size={14} />
+                    </Button>
+                    <span className="px-2">
+                      Page {currentPage + 1} of {pageCount}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={() => setPage(currentPage + 1)} disabled={currentPage >= pageCount - 1} aria-label="Next page" data-testid="button-page-next">
+                      <ChevronRight size={14} />
+                    </Button>
+                  </div>
+                </nav>
+              )}
+            </>
           )}
         </>
       )}
