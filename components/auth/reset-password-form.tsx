@@ -113,9 +113,11 @@ export function ResetPasswordForm() {
 
   return (
     <form onSubmit={onSubmit} noValidate className="rounded-lg border bg-card p-6 sm:p-8" data-testid="form-reset-password">
-      <div className="font-mono text-[11px] uppercase tracking-wider text-primary">Account recovery</div>
-      <h2 className="mt-2 text-xl font-semibold">Set a new password</h2>
-      <p className="mt-1 break-all text-sm text-muted-foreground">For {state.email}</p>
+      <div className="text-center">
+        <div className="font-mono text-[11px] uppercase tracking-wider text-primary">Account recovery</div>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight">Set a new password</h2>
+        <p className="mt-1 break-all text-sm text-muted-foreground">For {state.email}</p>
+      </div>
       {state.factorId && (
         <label className="mt-4 block text-xs font-medium">
           Code from your authenticator app

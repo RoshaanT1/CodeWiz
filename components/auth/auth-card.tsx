@@ -35,34 +35,37 @@ export function AuthCard({ mode, children }: { mode: AuthMode | "forgot" | "rese
   const copy = COPY[mode];
 
   return (
-    <div className="min-h-[100dvh]">
-      <header className="mx-auto flex max-w-[1200px] items-center justify-between px-5 py-5">
+    <div className="flex min-h-[100dvh] flex-col">
+      <header className="mx-auto flex w-full max-w-[1040px] items-center justify-between px-5 py-5">
         <Logo />
         <Link href="/" className="text-xs text-muted-foreground hover:text-foreground">
           Back to home
         </Link>
       </header>
-      <main className="mx-auto grid max-w-[920px] items-center gap-14 px-5 py-14 md:grid-cols-[1fr_380px]">
-        <div className="hidden md:block">
-          <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-primary">
-            <Code2 size={20} />
+      {/* The content sits in the middle of the space left under the header. */}
+      <main className="mx-auto flex w-full max-w-[1040px] flex-1 items-center px-5 pb-16 pt-4 md:pb-24">
+        <div className="grid w-full items-center gap-12 md:grid-cols-[minmax(0,1fr)_400px] lg:gap-20">
+          <div className="hidden md:block">
+            <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-lg bg-accent text-primary">
+              <Code2 size={22} />
+            </div>
+            <h1 className="text-4xl font-semibold tracking-tight">{copy.heading}</h1>
+            <p className="mt-4 max-w-md text-base leading-7 text-muted-foreground">{copy.blurb}</p>
+            <div className="mt-8 max-w-md border-l-2 border-primary/40 pl-4 text-sm leading-6 text-muted-foreground">
+              “The first step to fixing a bug is being able to explain what the code does.”
+            </div>
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight">{copy.heading}</h1>
-          <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">{copy.blurb}</p>
-          <div className="mt-8 border-l-2 border-primary/40 pl-4 text-sm leading-6 text-muted-foreground">
-            “The first step to fixing a bug is being able to explain what the code does.”
+          <div className="mx-auto w-full max-w-[400px]">
+            {!env.ok && (
+              <p
+                role="alert"
+                className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive"
+              >
+                {env.reason}
+              </p>
+            )}
+            {children}
           </div>
-        </div>
-        <div>
-          {!env.ok && (
-            <p
-              role="alert"
-              className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive"
-            >
-              {env.reason}
-            </p>
-          )}
-          {children}
         </div>
       </main>
     </div>
