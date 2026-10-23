@@ -118,7 +118,7 @@ export function OverviewMap({ functions, calls, selectedId, onSelect, limit = 14
         nodes={nodes}
         edges={edges}
         fitView
-        fitViewOptions={{ padding: 0.1, minZoom: 0.3, maxZoom: 1.05 }}
+        fitViewOptions={{ padding: 0.1, minZoom: 0.25, maxZoom: 1.05 }}
         minZoom={0.25}
         nodesDraggable={false}
         nodesConnectable={false}
