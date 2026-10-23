@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
+import { displayName } from "@/lib/functions/display-name";
+
 import { buildDrillResult, type DrillResult, type FindingRow } from "@/lib/grading/drill-result";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -157,7 +159,7 @@ export async function loadRoundResults(
           return {
             roundFunctionId: rf.id,
             functionId: rf.function_id,
-            name: rf.functions.qualified_name ?? rf.functions.name,
+            name: displayName(rf.functions.qualified_name ?? rf.functions.name, rf.functions.file_path),
             file: rf.functions.file_path,
             score: scoreRows.find((s) => s.function_id === rf.function_id)?.score ?? null,
             quiz: quizRows

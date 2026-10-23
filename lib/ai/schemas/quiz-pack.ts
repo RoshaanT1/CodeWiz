@@ -10,6 +10,16 @@ export const QuizQuestionSchema = z.object({
     partial_credit: z.string().min(5),
   }),
   lines: z.object({ start: z.number().int().positive(), end: z.number().int().positive() }),
+  /** Multiple-choice form of the same question: exactly 4 distinct options. */
+  options: z
+    .array(z.string().min(1).max(220))
+    .length(4)
+    .refine((opts) => new Set(opts.map((o) => o.trim().toLowerCase())).size === 4, "options must be 4 different answers"),
+  correct_index: z.number().int().min(0).max(3),
+  /** Why the correct option is right, shown after answering. */
+  why_correct: z.string().min(10).max(400),
+  /** An industry-standard practice related to the question, shown after answering. */
+  best_practice: z.string().min(10).max(300),
 });
 
 export const QuizPackSchema = z.object({
