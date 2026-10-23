@@ -32,20 +32,20 @@ export function PageTitle({
 }) {
   return (
     <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-      <div>
+      <div className="min-w-0">
         {eyebrow && (
           <div className="mb-2 font-mono text-[11px] uppercase tracking-[.09em] text-muted-foreground">
             {eyebrow}
           </div>
         )}
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="break-words text-2xl font-semibold tracking-tight">{title}</h1>
         {description && (
-          <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
+          <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground [overflow-wrap:anywhere]">
             {description}
           </p>
         )}
       </div>
-      {action}
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }
@@ -58,9 +58,9 @@ export function SectionTitle({
   aside?: ReactNode;
 }) {
   return (
-    <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-base font-semibold">{children}</h2>
-      {aside}
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <h2 className="min-w-0 text-base font-semibold">{children}</h2>
+      {aside && <div className="shrink-0">{aside}</div>}
     </div>
   );
 }
@@ -72,14 +72,14 @@ export function EmptyState({ title, text }: { title: string; text: string }) {
         <BookOpen size={16} className="text-muted-foreground" />
       </div>
       <div className="text-sm font-medium">{title}</div>
-      <p className="mt-1 text-xs text-muted-foreground">{text}</p>
+      <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">{text}</p>
     </div>
   );
 }
 
 export function NotFoundMessage() {
   return (
-    <div className="mx-auto max-w-[600px] py-20 text-center">
+    <div className="mx-auto max-w-[600px] py-12 text-center sm:py-20">
       <div className="font-mono text-xs text-primary">404 · NOT FOUND</div>
       <h1 className="mt-3 text-2xl font-semibold">This page isn’t here.</h1>
       <p className="mt-2 text-sm text-muted-foreground">

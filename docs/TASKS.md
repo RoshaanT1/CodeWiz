@@ -37,6 +37,9 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 - [x] **AUTH-4 Profile on sign-up** (Core, M Hammad). Needs DB-1
   - A database trigger creates the `profiles` row for each new user.
   - Done when: every new user has a profile row without any browser code.
+- [x] **AUTH-5 Forgot password** (Core, Roshaan). Needs AUTH-3
+  - "Forgot password?" on sign-in, a reset email that works in any browser, and a reset page that asks for the 2FA code first when the account has 2FA.
+  - Done when: a reset email arrives, the link sets a new password once, a used link is rejected, and a wrong 2FA code blocks the change.
 
 **Gig 3 (bonus):** when AUTH-3 is done, the agent prepares it automatically (see GIGS.md).
 
@@ -103,6 +106,9 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 - [ ] **MAP-3 Folder picker** (Core, Fizzah). Needs IMPORT-3
   - For big or cut-off repos, let the user pick a folder before parsing.
   - Done when: a large repo can be imported by choosing one folder.
+- [x] **MAP-4 Paginate the function list** (Core, Roshaan). Needs MAP-1
+  - Show the repo's functions 25 at a time with previous and next buttons. Changing the category or search goes back to page 1.
+  - Done when: a repo with more than 25 functions shows "1–25 of N" and the next page shows the rest.
 
 **Gig 6 (bonus):** when MAP-2 is done, the agent prepares it automatically (see GIGS.md). Build the call map in `components/call-map/` with no data fetching inside, so it lifts out cleanly.
 
@@ -149,6 +155,9 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 - [ ] **QUIZ-3 Explanation reveal** (Core, Fizzah). Needs QUIZ-2
   - Show the plain-language explanation after the answers, labelled as AI-generated. Add an "Explain" button for functions outside the round.
   - Watch out: an explained function is left out of future quizzes, since the user has already seen the answer. Check the browser's network tab too: rubrics and the explanation must not arrive before the answers are submitted.
+- [x] **QUIZ-4 Answer mode and practice questions** (Core, Roshaan). Needs QUIZ-3
+  - Before the first question, the user picks multiple choice (easier) or written (deeper). The choice is locked for that function's quiz and suggested next time.
+  - After the explanation, "Practise with more questions" adds up to 3 new multiple-choice questions, 9 at most per function. They count toward the quiz score.
 
 ## 9. Bug drills
 
@@ -163,6 +172,9 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
   - Highlighted code with line numbers. Click a line to flag it and write why, edit or remove flags, then submit.
   - Watch out: the line numbers on screen must match the stored code exactly.
   - Done when: flags survive a page reload before submitting.
+- [x] **DRILL-5 Bug tutor** (Core, Roshaan). Needs DRILL-4, GRADE-4
+  - "Stuck? Show me the bugs" submits the drill as it is. Each bug then offers the tutor (contract K): it explains the bug, asks the user to explain it back, and explains it another way until they get it, up to 4 tries.
+  - Done when: a missed bug can be explained, a good answer ends the lesson with "You've got it", and the tutor refuses before the drill is submitted.
 
 **Gig 2 (required):** when DRILL-3 is done, the agent prepares it automatically (see GIGS.md).
 
