@@ -37,6 +37,9 @@ Each task names its owner (see the folder ownership table in AGENTS.md), what it
 - [x] **AUTH-4 Profile on sign-up** (Core, M Hammad). Needs DB-1
   - A database trigger creates the `profiles` row for each new user.
   - Done when: every new user has a profile row without any browser code.
+- [x] **AUTH-5 Forgot password** (Core, Roshaan). Needs AUTH-3
+  - "Forgot password?" on sign-in, a reset email that works in any browser, and a reset page that asks for the 2FA code first when the account has 2FA.
+  - Done when: a reset email arrives, the link sets a new password once, a used link is rejected, and a wrong 2FA code blocks the change.
 
 **Gig 3 (bonus):** when AUTH-3 is done, the agent prepares it automatically (see GIGS.md).
 

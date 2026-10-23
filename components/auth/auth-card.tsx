@@ -15,6 +15,14 @@ const COPY = {
     heading: "A better way to read code.",
     blurb: "Practice with real functions, build stronger code-reading instincts, and keep your work private.",
   },
+  forgot: {
+    heading: "It happens to everyone.",
+    blurb: "We'll email you a link to choose a new password. Your practice history stays as it is.",
+  },
+  reset: {
+    heading: "Choose a new password.",
+    blurb: "If your account uses 2FA, you'll confirm it with your authenticator app first.",
+  },
 } as const;
 
 /**
@@ -22,7 +30,7 @@ const COPY = {
  * when the Supabase variables are missing, instead of letting the form fail
  * later.
  */
-export function AuthCard({ mode, children }: { mode: AuthMode; children: ReactNode }) {
+export function AuthCard({ mode, children }: { mode: AuthMode | "forgot" | "reset"; children: ReactNode }) {
   const env = getSupabaseEnv();
   const copy = COPY[mode];
 
